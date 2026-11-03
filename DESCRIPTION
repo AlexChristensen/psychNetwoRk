@@ -15,7 +15,7 @@ Description: Simulates multivariate normal data from Gaussian graphical models
     topologies (Christensen & Choi, 2026 <doi:10.1037/met0000853>;
     Christensen, Choi, Yang, & Xue, 2026 <doi:10.48550/arXiv.2609.05678>),
     with edge weight distributions calibrated to empirical psychometric
-    networks (Huth et al., 2025). Additional tools include
+    networks (Huth et al., 2025 <doi:10.1038/s41562-025-02314-2>). Additional tools include
     small-world network metrics, a proximity-swap ring lattice construction
     algorithm, categorization of continuous data with skew, and the addition
     of population (model) error so that the true network fits at a target

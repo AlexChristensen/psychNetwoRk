@@ -112,6 +112,7 @@ weibull_parameters(nodes = 10, sample_size = 500, bootstrap = TRUE)
 Huth, K. B. S., Haslbeck, J. M. B., Keetelaar, S., Van Holst, R. J., &
 Marsman, M. (2025). Statistical evidence in psychological networks.
 \emph{Nature Human Behaviour}.
+\doi{10.1038/s41562-025-02314-2}
 }
 \author{
 Alexander P. Christensen <alexpaulchristensen@gmail.com>

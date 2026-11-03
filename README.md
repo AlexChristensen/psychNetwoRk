@@ -179,6 +179,6 @@ Christensen, A. P., & Choi, J. (2026). Network accuracy across levels of analysi
 
 Christensen, A. P., Choi, J., Yang, H., & Xue, L. (2026). Adaptive regularization via extreme value distributions for Gaussian graphical models (arXiv:2609.05678). arXiv. https://doi.org/10.48550/arXiv.2609.05678
 
-Huth, K. B. S., Haslbeck, J. M. B., Keetelaar, S., Van Holst, R. J., & Marsman, M. (2025). Statistical evidence in psychological networks. *Nature Human Behaviour*.
+Huth, K. B. S., Haslbeck, J. M. B., Keetelaar, S., Van Holst, R. J., & Marsman, M. (2025). Statistical evidence in psychological networks. *Nature Human Behaviour*. https://doi.org/10.1038/s41562-025-02314-2
 
 Peeters, C. F., van de Wiel, M. A., & van Wieringen, W. N. (2020). The spectral condition number plot for regularization parameter evaluation. *Computational Statistics*, *35*(2), 629&ndash;646. https://doi.org/10.1007/s00180-019-00912-z
