@@ -1,0 +1,31 @@
+Package: psychNetwoRk
+Title: Data Simulation Based on Psychometric Networks
+Version: 0.1.0
+Date: 2026-11-03
+Authors@R: c(
+    person("Alexander", "Christensen", email = "alexpaulchristensen@gmail.com", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-9798-7037")),
+    person("Jeongwon", "Choi", email = "jungwon799@gmail.com", role = "ctb", comment = c(ORCID = "0000-0001-6087-2124")),
+    person("David", "Blackman", role = "ctb", comment = "Original xoshiro.c implementation"),
+    person("Sebastiano", "Vigna", role = "ctb", comment = "Original xoshiro.c implementation"),
+    person("John", "Burkardt", role = c("cph", "ctb"), comment = "Original ziggurat.c implementation")
+   )
+Description: Simulates multivariate normal data from Gaussian graphical models
+    (GGMs) with realistic psychometric network structure. Networks can be
+    generated with stochastic block model or small-world (Watts-Strogatz)
+    topologies (Christensen & Choi, 2026 <doi:10.1037/met0000853>;
+    Christensen, Choi, Yang, & Xue, 2026 <doi:10.48550/arXiv.2609.05678>),
+    with edge weight distributions calibrated to empirical psychometric
+    networks (Huth et al., 2025). Additional tools include
+    small-world network metrics, a proximity-swap ring lattice construction
+    algorithm, categorization of continuous data with skew, and the addition
+    of population (model) error so that the true network fits at a target
+    level of fit.
+Depends: R (>= 3.5.0)
+License: AGPL (>= 3)
+Encoding: UTF-8
+LazyData: true
+NeedsCompilation: yes
+Imports: igraph, glasso, methods, psych, stats, utils
+Copyright: See inst/COPYRIGHTS for details
+BugReports: https://github.com/AlexChristensen/psychNetwoRk/issues
+Config/roxygen2/version: 8.1.1

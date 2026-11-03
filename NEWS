@@ -1,0 +1,6 @@
+## Version 0.1.0
+
+o NEW: initial release. Simulation tools moved from {L0ggm} (0.1.3):
+  `simulate_sbm()`, `simulate_smallworld()`, `add_population_error()`,
+  `smallworldness()`, `proxswap_lattice()`, `categorize()`, and
+  `weibull_parameters()`

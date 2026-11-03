@@ -1,0 +1,14 @@
+citHeader("To cite {psychNetwoRk} in publications use:")
+
+bibentry(
+	bibtype	= "manual",
+	key	= "psychNetwoRk",
+	title	= "psychNetwoRk: Data simulation based on psychometric networks",
+	author	= c(person("Christensen,", "Alexander")),
+	year = "2026",
+
+  textVersion  = paste0(
+  	"Christensen, A. P. (2026). ",
+    "psychNetwoRk: Data simulation based on psychometric networks."
+  )
+)

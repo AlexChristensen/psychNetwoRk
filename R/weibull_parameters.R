@@ -1,0 +1,146 @@
+#' Predict Weibull Parameters for Edge Weight Distributions
+#'
+#' @description
+#' Predicts the shape and scale parameters of a Weibull distribution that
+#' characterizes the absolute partial correlation edge weights of a psychometric
+#' network, given its number of nodes and sample size. Parameter estimates are
+#' derived from a Seemingly Unrelated Regression (SUR) model fitted to empirical
+#' network data from Huth et al. (2025), where absolute partial correlations were
+#' found to follow a Weibull distribution more consistently than Beta, Gamma, or
+#' log-normal alternatives.
+#'
+#' @param nodes Numeric (length = 1).
+#' The number of nodes (variables) in the network.
+#' Must be between 8 and 54, reflecting the range of the empirical networks
+#' used to fit the underlying SUR model.
+#'
+#' @param sample_size Numeric (length = 1).
+#' The sample size of the dataset from which the network is estimated.
+#'
+#' @param snr Numeric (length = 1).
+#' Signal-to-noise ratio of partial correlations (\eqn{\bar{|w|} / \mathrm{SD}(|w|)}).
+#' Values less than 1 indicate wider range of partial correlations (\eqn{w}) whereas
+#' values greater than 1 indicate narrower range.
+#' Defaults to \code{1} where the mean of the partial correlations (\eqn{\bar{|w|}})
+#' is equal to the standard deviation (\eqn{\mathrm{SD}(|w|)})
+#'
+#' @param bootstrap Boolean (length = 1). If \code{TRUE}, a randomly sampled residual from
+#' the SUR model fit is added to each predicted parameter, introducing
+#' empirically grounded variability suitable for use in simulation or
+#' bootstrapping contexts. Defaults to \code{FALSE}.
+#'
+#' @details
+#' The shape and scale parameters are predicted from derived network descriptors
+#' that differ between the two SUR equations:
+#'
+#' \describe{
+#'   \item{\code{rlp}}{The reciprocal log of the number of nodes,
+#'     \eqn{1 / \log(p)}, capturing the diminishing marginal effect of network
+#'     size on edge weight distributions. Used in both the shape and scale
+#'     equations.}
+#'   \item{\code{scaling}}{The standard error of partial correlations defined as
+#'     \eqn{\sqrt{1 / (n - p)}}, where \eqn{n} is the sample size and
+#'     \eqn{p} is the number of nodes. Larger values indicate greater sampling
+#'     uncertainty in the partial correlation estimates. Used in the scale
+#'     equation only.}
+#' }
+#'
+#' The two SUR equations have an asymmetric structure reflecting different
+#' theoretical roles for sampling precision. Shape — which governs the
+#' concentration of the edge weight distribution — is determined solely by
+#' signal characteristics of the network via \code{snr} and \code{rlp}.
+#' Scale — which governs the typical magnitude of edge weights — additionally
+#' depends on \code{scaling}, as the expected size of partial correlations is
+#' directly affected by estimation precision. This asymmetry is both
+#' empirically supported (dropping \code{scaling} from the shape equation
+#' costs \eqn{\Delta R^2 < 0.006}) and theoretically coherent.
+#'
+#' These predictors enter two SUR equations whose coefficients are stored in
+#' the internal \code{weibull_weights} dataset. SUR was used to account for the
+#' correlated residuals between the shape and scale equations across networks
+#' (residual correlation = 0.261). Model fit was strong: the shape equation
+#' achieved \eqn{R^2 = 0.887} (RMSE = 0.048) and the scale equation achieved
+#' \eqn{R^2 = 0.885} (RMSE = 0.011). Shape residuals were normally distributed
+#' (Shapiro-Wilk W = 0.990, p = 0.173). Scale residuals showed a modest
+#' departure from normality (Shapiro-Wilk W = 0.973, p < 0.001), consistent
+#' with slight right skew in the scale outcome and test sensitivity at n = 194
+#' rather than a substantive violation. Heteroskedasticity was detected in both
+#' the shape equation (Breusch-Pagan p < 0.001) and the scale equation
+#' (Breusch-Pagan p < 0.001); robust standard errors (HC3) were used for
+#' inference. Multicollinearity among predictors in the scale equation was
+#' negligible (VIF \eqn{\leq} 1.60); the shape equation contains only two
+#' predictors with no multicollinearity concern.
+#'
+#' \code{nodes} influences predicted shape and scale via \code{rlp}.
+#' \code{sample_size} influences predicted scale via \code{scaling}, and
+#' both parameters via their joint contribution to \code{snr} when it is
+#' estimated from data rather than supplied directly.
+#'
+#' Empirically, shape values ranged from approximately 0.72 to 1.63
+#' (M = 1.07, SD = 0.14) and scale values from approximately 0.03 to 0.19
+#' (M = 0.10, SD = 0.03) across the 194 networks used to fit the model. Shape
+#' values near 1 indicate approximately exponential edge weight distributions;
+#' values above 1 indicate a rising hazard (mode-bearing distribution).
+#'
+#' When \code{bootstrap = TRUE}, residuals are drawn via \code{shuffle()} --
+#' a random sampling without replacement -- from the empirical SUR residuals,
+#' preserving the observed marginal residual distribution.
+#'
+#' @return A named numeric vector of length 2:
+#' \describe{
+#'   \item{\code{shape}}{The predicted Weibull shape parameter (\eqn{k > 0}).}
+#'   \item{\code{scale}}{The predicted Weibull scale parameter (\eqn{\lambda > 0}).}
+#' }
+#'
+#' @examples
+#' # Predict parameters for a 10-node network with n = 500
+#' weibull_parameters(nodes = 10, sample_size = 500)
+#'
+#' # With bootstrapped residuals for use in simulation
+#' weibull_parameters(nodes = 10, sample_size = 500, bootstrap = TRUE)
+#'
+#' @author Alexander P. Christensen <alexpaulchristensen@gmail.com>
+#'
+#' @references
+#' Huth, K. B. S., Haslbeck, J. M. B., Keetelaar, S., Van Holst, R. J., &
+#' Marsman, M. (2025). Statistical evidence in psychological networks.
+#' \emph{Nature Human Behaviour}.
+#'
+#' @export
+#'
+# Predict Weibull parameters ----
+# Updated 29.04.2026
+weibull_parameters <- function(nodes, sample_size, snr = 1, bootstrap = FALSE)
+{
+
+  # Get Weibull model
+  weibull_weights <- get(data("weibull_weights", package = "psychNetwoRk", envir = environment()))
+
+  # Compute descriptive parameters
+  shape_parameters <- c(snr = snr, rlp = 1 / log(nodes))
+  scale_parameters <- c(shape_parameters, scaling = sqrt(1 / (sample_size - nodes)))
+
+  # Compute Weibull parameters
+  shape <- unname(
+    weibull_weights$shape$coefficients[1] + sum(weibull_weights$shape$coefficients[-1] * shape_parameters)
+  )
+  scale <- unname(
+    weibull_weights$scale$coefficients[1] + sum(weibull_weights$scale$coefficients[-1] * scale_parameters)
+  )
+
+  # Bootstrap residuals
+  if(bootstrap){
+
+    # Draw index
+    index <- shuffle(seq_along(weibull_weights$shape$residuals), 1)
+
+    # Set parameters with residuals
+    shape <- shape + weibull_weights$shape$residuals[index]
+    scale <- scale + weibull_weights$scale$residuals[index]
+
+  }
+
+  # Return parameters
+  return(c(shape = shape, scale = scale))
+
+}
