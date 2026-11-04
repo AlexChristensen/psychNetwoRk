@@ -7,44 +7,110 @@
 \usage{
 add_population_error(
   ggm_object,
-  misfit = c("close", "acceptable"),
-  tolerance = 0.01,
-  max_iterations = 10
+  method = c("cb", "tkl", "wb", "hb"),
+  metric = c("CFI", "TLI", "RMSEA", "SRMR"),
+  fit_value = NULL,
+  max_residual = 0.1,
+  tolerance = 0.001,
+  max_iterations = 10,
+  control = list()
 )
 }
 \arguments{
 \item{ggm_object}{Data object from \code{\link[psychNetwoRk]{simulate_sbm}} or
 \code{\link[psychNetwoRk]{simulate_smallworld}}}
 
-\item{misfit}{Character or numeric (length = 1).
-Magnitude of error to add expressed as the CFI
-of the true network fit to the population correlation matrix with error.
-Defaults to \code{"close"}.
+\item{method}{Character (length = 1).
+Method used to generate the population error.
+Defaults to \code{"cb"}.
 Available options:
 
 \itemize{
 
-\item \code{"close"} --- Slight deviations from the original population
-correlation matrix (CFI = 0.99)
+\item \code{"cb"} --- Cudeck and Browne (1992). Error is placed only on
+the cells that the true network constrains to zero, so the true network
+remains the best-fitting model of the population correlation matrix with
+error (the error is orthogonal to the true network)
 
-\item \code{"acceptable"} --- Moderate deviations from the original population
-correlation matrix (CFI = 0.95)
+\item \code{"tkl"} --- Tucker, Koopman, and Linn (1969). Error is
+the contribution of many random minor factors whose loadings decay
+geometrically. The proportion of variance attributed to the minor factors
+is optimized
 
-}
+\item \code{"wb"} --- Wu and Browne (2015). The population correlation
+matrix with error is a random draw from an inverted Wishart distribution
+centered on the original population correlation matrix. The dispersion
+of the distribution is optimized
 
-A single number between 0 and 1 (exclusive) can be used to directly
-specify the target CFI}
+\item \code{"hb"} --- Hu and Bentler (1998). Underparameterized
+misspecification: a random subset of the edges that are zero in the true
+network are non-zero in the population (omitted edges). The size of the
+omitted edges is optimized
+
+}}
+
+\item{metric}{Character (length = 1).
+Fit index used as the objective criterion. The true network is fit to the
+population correlation matrix with error (constrained maximum likelihood)
+and the error is optimized so that \code{metric} equals \code{fit_value}.
+Defaults to \code{"CFI"}.
+Available options:
+
+\itemize{
+
+\item \code{"CFI"} --- Comparative fit index
+
+\item \code{"TLI"} --- Tucker-Lewis index
+
+\item \code{"RMSEA"} --- Root mean square error of approximation
+
+\item \code{"SRMR"} --- Standardized root mean square residual
+
+}}
+
+\item{fit_value}{Numeric (length = 1).
+Target value of \code{metric} for the true network fit to the population
+correlation matrix with error. Must be between 0 and 1 (exclusive).
+Defaults to the conventional cutoff for the \code{metric}:
+\code{0.95} for \code{"CFI"} and \code{"TLI"}, \code{0.06} for
+\code{"RMSEA"}, and \code{0.08} for \code{"SRMR"}}
+
+\item{max_residual}{Numeric (length = 1).
+Maximum absolute error that can be added to any cell of the original
+population correlation matrix. If the target \code{fit_value} cannot be reached
+without exceeding this value, the closest solution is used (with a warning).
+Defaults to \code{0.10}}
 
 \item{tolerance}{Numeric (length = 1).
-Maximum absolute difference between the target CFI and the CFI
-of the population correlation matrix with error. Ensures that
+Maximum absolute difference between the target \code{fit_value} and the
+\code{metric} of the population correlation matrix with error. Ensures that
 the appropriate amount of population error was added.
 Defaults to \code{0.001}}
 
 \item{max_iterations}{Numeric (length = 1).
-Maximum number of optimization attempts (random starting values)
-to reach the target CFI within the specified \code{tolerance}.
+Maximum number of optimization attempts (random starting values or random
+draws of the error) to reach the target \code{fit_value} within the specified
+\code{tolerance}.
 Defaults to \code{10}}
+
+\item{control}{List.
+Method-specific options. Options that do not apply to \code{method} are
+ignored. Available options:
+
+\itemize{
+
+\item \code{minor_factors} --- Number of minor factors for
+\code{method = "tkl"}. Defaults to \code{max(50, 2 * nodes)}
+
+\item \code{decay} --- Geometric decay (\eqn{\epsilon}) of the minor factor
+loadings for \code{method = "tkl"}. Must be between 0 and 1.
+Defaults to \code{0.02}
+
+\item \code{omitted} --- Proportion of the zero edges in the true network
+that are omitted edges for \code{method = "hb"}. At least one edge is always
+omitted. Defaults to \code{0.10}
+
+}}
 }
 \value{
 Returns a list of the same class(es) and structure as the
@@ -75,22 +141,34 @@ A list containing the parameters used to generate population error:
 
 \itemize{
 
-\item \code{misfit} --- Specified misfit value
+\item \code{method} --- Method used to generate the population error
 
-\item \code{target_CFI} --- Target CFI
+\item \code{metric} --- Fit index used as the objective criterion
 
-\item \code{CFI} --- CFI achieved
+\item \code{fit_value} --- Target value of \code{metric}
+
+\item \code{achieved} --- Value of \code{metric} achieved by the true network
+fit to the population correlation matrix with error
+
+\item \code{fit} --- Named vector of all fit indices (\code{CFI},
+\code{TLI}, \code{RMSEA}, and \code{SRMR}) achieved
 
 \item \code{delta} --- Minimum of the (maximum likelihood) discrepancy
-function corresponding to the misfit value
+function corresponding to the achieved fit
 
 \item \code{error} --- Matrix of the error that was added to the
 original population correlation matrix
+
+\item \code{max_error} --- Largest absolute error that was added (never
+larger than \code{max_residual})
+
+\item \code{max_residual} --- Maximum absolute error allowed
 
 \item \code{R_difference} --- Largest absolute difference between the
 original population correlation matrix and the known graph (constrained
 maximum likelihood) fit to the population correlation matrix with error.
 Values near zero indicate that the error is orthogonal to the true network
+(expected for \code{method = "cb"} only)
 
 \item \code{iterations} --- Number of optimization attempts used
 
@@ -104,8 +182,26 @@ Values near zero indicate that the error is orthogonal to the true network
 Adds population (model) error to simulated Gaussian graphical model data.
 The population correlation matrix is perturbed so that the true network
 (known graph) no longer fits perfectly but instead fits at a specified
-comparative fit index (CFI). Data are then re-generated from the perturbed
-population correlation matrix. See examples to get started
+value of a fit index (CFI, TLI, RMSEA, or SRMR). Data are then
+re-generated from the perturbed population correlation matrix.
+See examples to get started
+}
+\details{
+The error is generated with one of four methods (see \code{method}) and
+optimized so that the \code{metric} of the true network, fit to the
+population correlation matrix with error using constrained maximum
+likelihood (i.e., the known graph), equals \code{fit_value}. The fit indices
+are computed at the population level using the maximum likelihood
+discrepancy function between the population correlation matrix with error
+and the correlation matrix implied by the true network. The largest
+absolute error added to any cell of the original population correlation
+matrix is limited by \code{max_residual}.
+
+Each optimization attempt uses new random starting values or random draws
+of the error (up to \code{max_iterations}) and the attempt closest to
+\code{fit_value} is returned. If \code{fit_value} cannot be reached within
+\code{tolerance} (e.g., because \code{max_residual} is too small), a warning
+is given and the closest solution is used
 }
 \examples{
 # Generate SBM data
@@ -118,15 +214,20 @@ sbm <- simulate_sbm(
   sample_size = 1000
 )
 
-# Add small population error
-sbm_close <- add_population_error(
-  ggm_object = sbm, misfit = "close"
-)
+# Add population error (CFI = 0.95 using Cudeck and Browne)
+sbm_cfi <- add_population_error(ggm_object = sbm)
 
 \donttest{
-# Add moderate population error
-sbm_acceptable <- add_population_error(
-  ggm_object = sbm, misfit = "acceptable"
+# Use Wu and Browne to target TLI = 0.90 with a larger maximum error
+sbm_wb <- add_population_error(
+  ggm_object = sbm, method = "wb",
+  metric = "TLI", fit_value = 0.90, max_residual = 0.30
+)
+
+# Target RMSEA = 0.04 with a different maximum error
+sbm_rmsea <- add_population_error(
+  ggm_object = sbm, metric = "RMSEA",
+  fit_value = 0.04, max_residual = 0.20
 )
 
 # Generate small-world data and add population error
@@ -135,14 +236,32 @@ sw <- simulate_smallworld(
   sample_size = 1000
 )
 
-sw_close <- add_population_error(ggm_object = sw)}
+sw_srmr <- add_population_error(
+  ggm_object = sw, metric = "SRMR", fit_value = 0.05
+)}
 
 }
 \references{
+\strong{Cudeck and Browne (\code{"cb"})} \cr
 Cudeck, R., & Browne, M.W. (1992).
 Constructing a covariance matrix that yields a specified minimizer and a specified minimum discrepancy function value.
 \emph{Psychometrika}, \emph{57}, 357--369.
+
+\strong{Tucker, Koopman, and Linn (\code{"tkl"})} \cr
+Tucker, L.R., Koopman, R.F., & Linn, R.L. (1969).
+Evaluation of factor analytic research procedures by means of simulated correlation matrices.
+\emph{Psychometrika}, \emph{34}, 421--459.
+
+\strong{Wu and Browne (\code{"wb"})} \cr
+Wu, H., & Browne, M.W. (2015).
+Quantifying adventitious error in a covariance structure as a random effect.
+\emph{Psychometrika}, \emph{80}, 571--600.
+
+\strong{Hu and Bentler (\code{"hb"}) and fit indices} \cr
+Hu, L., & Bentler, P.M. (1998).
+Fit indices in covariance structure modeling: Sensitivity to underparameterized model misspecification.
+\emph{Psychological Methods}, \emph{3}, 424--453.
 }
 \author{
-Alexander P. Christensen <alexpaulchristensen@gmail.com>,
+Alexander P. Christensen <alexpaulchristensen@gmail.com>
 }

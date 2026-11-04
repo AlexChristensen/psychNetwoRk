@@ -7,7 +7,7 @@
 
 This package simulates multivariate normal data from **Gaussian graphical models** (GGMs) with realistic psychometric network structure. Two topology generators are included: `simulate_smallworld()` produces small-world networks via degree-weighted Watts-Strogatz rewiring, and `simulate_sbm()` produces community-structured networks via a stochastic block model. Both are calibrated to edge weight distributions empirically observed across 194 psychometric networks (Huth et al., 2025) through `weibull_parameters()`, a Seemingly Unrelated Regression model that predicts Weibull shape and scale from network size, sample size, and signal-to-noise ratio.
 
-Additional tools include `smallworldness()` (small-world network metrics), `proxswap_lattice()` (proximity-swap ring lattice construction), `categorize()` (categorizing continuous data with skew), and `add_population_error()` (adds population/model error so that the true network fits at a target CFI).
+Additional tools include `smallworldness()` (small-world network metrics), `proxswap_lattice()` (proximity-swap ring lattice construction), `categorize()` (categorizing continuous data with skew), and `add_population_error()` (adds population/model error so that the true network fits at a target CFI, TLI, RMSEA, or SRMR using one of four methods).
 
 To estimate networks from the simulated data with $L_0$ penalties, see [{L0ggm}](https://github.com/AlexChristensen/L0ggm).
 
@@ -46,8 +46,8 @@ dm <- matrix(0.20, nrow = 3, ncol = 3)
 diag(dm) <- 0.90
 sbm <- simulate_sbm(nodes = 6, blocks = 3, density_matrix = dm, sample_size = 500)
 
-# Add population (model) error so the true network has acceptable fit
-sbm_error <- add_population_error(sbm, misfit = "acceptable")
+# Add population (model) error so the true network has CFI = 0.95
+sbm_error <- add_population_error(sbm, method = "cb", metric = "CFI", fit_value = 0.95)
 ```
 
 ---
@@ -159,6 +159,47 @@ weibull_parameters(nodes = 15, sample_size = 300, bootstrap = TRUE)
 </details>
 
 <details>
+<summary><strong><code>add_population_error()</code> — Population (model) error</strong></summary>
+
+Perturbs the population correlation matrix of a `simulate_sbm()` or `simulate_smallworld()` object so that the true network no longer fits perfectly. The error is optimized until the true network, refit to the new matrix by constrained maximum likelihood, reaches a target value of a fit index. Data are then re-generated from the perturbed matrix (same sample size and skew).
+
+| Method | Description |
+|---|---|
+| `"cb"` | Cudeck & Browne (1992): error on the cells the true network constrains to zero (orthogonal to the network); default |
+| `"tkl"` | Tucker, Koopman, & Linn (1969): random minor factors with geometrically decaying loadings; the proportion of variance from minor factors is optimized |
+| `"wb"` | Wu & Browne (2015): inverted-Wishart draw centered on the original matrix; the dispersion (approximately RMSEA$^2$) is optimized |
+| `"hb"` | Hu & Bentler (1998): underparameterized misspecification; a random subset of the network's zero edges is non-zero in the population and their size is optimized |
+
+| Argument | Description |
+|---|---|
+| `ggm_object` | Output from `simulate_sbm()` or `simulate_smallworld()` |
+| `method` | Error method (see above); default `"cb"` |
+| `metric` | Fit index to target: `"CFI"` (default), `"TLI"`, `"RMSEA"`, or `"SRMR"` |
+| `fit_value` | Target value of `metric` in $(0, 1)$; default is the conventional cutoff (CFI/TLI `0.95`, RMSEA `0.06`, SRMR `0.08`) |
+| `max_residual` | Largest absolute error added to any cell; default `0.10`. If the target cannot be reached within this limit, the closest solution is returned with a warning |
+| `tolerance` | Maximum absolute difference between `fit_value` and the achieved `metric`; default `0.001` |
+| `max_iterations` | Maximum optimization attempts (random starts or draws); default `10` |
+| `control` | Method options: `minor_factors` (`max(50, 2 * nodes)`) and `decay` (`0.02`) for `"tkl"`; `omitted` (`0.10`, proportion of zero edges) for `"hb"` |
+
+**References:** Cudeck & Browne (1992); Tucker et al. (1969); Wu & Browne (2015); Hu & Bentler (1998).
+
+**Returns:** the input object with class `"ggm_pe"` appended and a `population_error` element containing `method`, `metric`, `fit_value`, `achieved`, `fit` (CFI, TLI, RMSEA, and SRMR achieved), `delta`, `error`, `max_error`, `max_residual`, `R_difference`, and `iterations`. `R_difference` is near zero only when the error is orthogonal to the true network (`"cb"`).
+
+```r
+dm <- matrix(0.20, nrow = 3, ncol = 3)
+diag(dm) <- 0.90
+
+sbm <- simulate_sbm(nodes = 6, blocks = 3, density_matrix = dm, sample_size = 1000)
+
+# True network fits at RMSEA = 0.05 using Wu & Browne (2015)
+result <- add_population_error(
+  sbm, method = "wb", metric = "RMSEA", fit_value = 0.05, max_residual = 0.20
+)
+```
+
+</details>
+
+<details>
 <summary><strong>Simulation internals (<code>helpers_simulation</code>)</strong></summary>
 
 The shared simulation pipeline is implemented in `helpers_simulation.R` and handles tasks common to both `simulate_smallworld()` and `simulate_sbm()`.
@@ -179,6 +220,14 @@ Christensen, A. P., & Choi, J. (2026). Network accuracy across levels of analysi
 
 Christensen, A. P., Choi, J., Yang, H., & Xue, L. (2026). Adaptive regularization via extreme value distributions for Gaussian graphical models (arXiv:2609.05678). arXiv. https://doi.org/10.48550/arXiv.2609.05678
 
+Cudeck, R., & Browne, M. W. (1992). Constructing a covariance matrix that yields a specified minimizer and a specified minimum discrepancy function value. *Psychometrika*, *57*(3), 357&ndash;369. https://doi.org/10.1007/BF02295424
+
+Hu, L., & Bentler, P. M. (1998). Fit indices in covariance structure modeling: Sensitivity to underparameterized model misspecification. *Psychological Methods*, *3*(4), 424&ndash;453. https://doi.org/10.1037/1082-989X.3.4.424
+
 Huth, K. B. S., Haslbeck, J. M. B., Keetelaar, S., Van Holst, R. J., & Marsman, M. (2025). Statistical evidence in psychological networks. *Nature Human Behaviour*. https://doi.org/10.1038/s41562-025-02314-2
 
 Peeters, C. F., van de Wiel, M. A., & van Wieringen, W. N. (2020). The spectral condition number plot for regularization parameter evaluation. *Computational Statistics*, *35*(2), 629&ndash;646. https://doi.org/10.1007/s00180-019-00912-z
+
+Tucker, L. R., Koopman, R. F., & Linn, R. L. (1969). Evaluation of factor analytic research procedures by means of simulated correlation matrices. *Psychometrika*, *34*(4), 421&ndash;459. https://doi.org/10.1007/BF02290601
+
+Wu, H., & Browne, M. W. (2015). Quantifying adventitious error in a covariance structure as a random effect. *Psychometrika*, *80*(3), 571&ndash;600. https://doi.org/10.1007/s11336-015-9451-3

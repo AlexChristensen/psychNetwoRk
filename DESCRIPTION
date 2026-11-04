@@ -19,7 +19,11 @@ Description: Simulates multivariate normal data from Gaussian graphical models
     small-world network metrics, a proximity-swap ring lattice construction
     algorithm, categorization of continuous data with skew, and the addition
     of population (model) error so that the true network fits at a target
-    level of fit.
+    level of a fit index (CFI, TLI, RMSEA, or SRMR) using the methods of
+    Cudeck and Browne (1992) <doi:10.1007/BF02295424>, Tucker, Koopman, and
+    Linn (1969) <doi:10.1007/BF02290601>, Wu and Browne (2015)
+    <doi:10.1007/s11336-015-9451-3>, or Hu and Bentler (1998)
+    <doi:10.1037/1082-989X.3.4.424>.
 Depends: R (>= 3.5.0)
 License: AGPL (>= 3)
 Encoding: UTF-8

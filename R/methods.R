@@ -108,14 +108,17 @@ ggm_simulate_describe <- function(x, detailed = FALSE)
     error <- x$population_error
 
     cat("\nPopulation error:\n")
-    cat(sprintf("  %-24s%.3f\n", "Target CFI:", error$target_CFI))
-    cat(sprintf("  %-24s%.3f\n", "CFI:", error$CFI))
+    cat(sprintf("  %-24s%s\n", "Method:", toupper(error$method)))
+    cat(sprintf("  %-24s%.3f\n", paste0("Target ", error$metric, ":"), error$fit_value))
+    cat(sprintf("  %-24s%.3f\n", paste0(error$metric, ":"), error$achieved))
     cat(sprintf("  %-24s%.5f\n", "Delta:", error$delta))
+    cat(sprintf("  %-24s%.3f\n", "Maximum error:", error$max_error))
 
     if(isTRUE(detailed)){
       error_values <- error$error[upper.tri(error$error)]
       error_values <- error_values[error_values != 0]
       cat(sprintf("  %-24s%s\n", "Error (absolute):", ggm_simulate_format_range(abs(error_values))))
+      cat(sprintf("  %-24s%s\n", "Fit indices:", paste(names(error$fit), sprintf("%.3f", error$fit), collapse = ", ")))
       cat(sprintf("  %-24s%.2e\n", "Orthogonality (max):", error$R_difference))
       cat(sprintf("  %-24s%d\n", "Optimization attempts:", error$iterations))
     }
