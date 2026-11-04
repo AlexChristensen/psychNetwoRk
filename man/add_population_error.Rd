@@ -7,11 +7,11 @@
 \usage{
 add_population_error(
   ggm_object,
-  method = c("cb", "tkl", "wb", "hb"),
+  method,
   metric = c("CFI", "TLI", "RMSEA", "SRMR"),
   fit_value = NULL,
   max_residual = 0.1,
-  tolerance = 0.001,
+  tolerance = 0.01,
   max_iterations = 10,
   control = list()
 )
@@ -22,7 +22,7 @@ add_population_error(
 
 \item{method}{Character (length = 1).
 Method used to generate the population error.
-Defaults to \code{"cb"}.
+There is no default; \code{method} must be specified.
 Available options:
 
 \itemize{
@@ -53,7 +53,11 @@ omitted edges is optimized
 Fit index used as the objective criterion. The true network is fit to the
 population correlation matrix with error (constrained maximum likelihood)
 and the error is optimized so that \code{metric} equals \code{fit_value}.
-Defaults to \code{"CFI"}.
+Defaults to the fit index that is consistent with \code{method}:
+\code{"CFI"} for \code{"cb"} and \code{"tkl"}, \code{"RMSEA"} for
+\code{"wb"} (the dispersion is approximately RMSEA\eqn{^2}), and
+\code{"SRMR"} for \code{"hb"} (error is defined through the size of
+omitted edges).
 Available options:
 
 \itemize{
@@ -85,7 +89,7 @@ Defaults to \code{0.10}}
 Maximum absolute difference between the target \code{fit_value} and the
 \code{metric} of the population correlation matrix with error. Ensures that
 the appropriate amount of population error was added.
-Defaults to \code{0.001}}
+Defaults to \code{0.01}}
 
 \item{max_iterations}{Numeric (length = 1).
 Maximum number of optimization attempts (random starting values or random
@@ -215,7 +219,7 @@ sbm <- simulate_sbm(
 )
 
 # Add population error (CFI = 0.95 using Cudeck and Browne)
-sbm_cfi <- add_population_error(ggm_object = sbm)
+sbm_cfi <- add_population_error(ggm_object = sbm, method = "cb")
 
 \donttest{
 # Use Wu and Browne to target TLI = 0.90 with a larger maximum error
@@ -226,7 +230,7 @@ sbm_wb <- add_population_error(
 
 # Target RMSEA = 0.04 with a different maximum error
 sbm_rmsea <- add_population_error(
-  ggm_object = sbm, metric = "RMSEA",
+  ggm_object = sbm, method = "cb", metric = "RMSEA",
   fit_value = 0.04, max_residual = 0.20
 )
 
@@ -237,7 +241,7 @@ sw <- simulate_smallworld(
 )
 
 sw_srmr <- add_population_error(
-  ggm_object = sw, metric = "SRMR", fit_value = 0.05
+  ggm_object = sw, method = "hb", fit_value = 0.05
 )}
 
 }

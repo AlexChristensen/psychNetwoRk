@@ -9,4 +9,7 @@ o NEW: `add_population_error()` gains `method` ("cb" Cudeck & Browne, 1992;
   "tkl" Tucker, Koopman, & Linn, 1969; "wb" Wu & Browne, 2015; "hb" Hu &
   Bentler, 1998), `metric` ("CFI", "TLI", "RMSEA", "SRMR"), `max_residual`
   (largest absolute error added), and `control` arguments. `fit_value` is now a
-  numeric target value (defaults to the conventional cutoff of `metric`)
+  numeric target value (defaults to the conventional cutoff of `metric`).
+  `method` has no default and must be specified. `metric` defaults to the fit
+  index consistent with `method` ("CFI" for "cb" and "tkl", "RMSEA" for "wb",
+  and "SRMR" for "hb")
