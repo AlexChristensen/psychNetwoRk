@@ -176,14 +176,13 @@ Perturbs the population correlation matrix of a `simulate_sbm()` or `simulate_sm
 | `method` | Error method (see above); required, no default |
 | `metric` | Fit index to target: `"CFI"`, `"TLI"`, `"RMSEA"`, or `"SRMR"`; default depends on `method` (`"CFI"` for `"cb"` and `"tkl"`; `"RMSEA"` for `"wb"`; `"SRMR"` for `"hb"`) |
 | `fit_value` | Target value of `metric` in $(0, 1)$; default is the conventional cutoff (CFI/TLI `0.95`, RMSEA `0.06`, SRMR `0.08`) |
-| `max_residual` | Largest absolute error added to any cell; default `0.10`. If the target cannot be reached within this limit, the closest solution is returned with a warning |
 | `tolerance` | Maximum absolute difference between `fit_value` and the achieved `metric`; default `0.01` |
 | `max_iterations` | Maximum optimization attempts (random starts or draws); default `10` |
 | `control` | Method options: `minor_factors` (`max(50, 2 * nodes)`) and `decay` (`0.02`) for `"tkl"`; `omitted` (`0.10`, proportion of zero edges) for `"hb"` |
 
 **References:** Cudeck & Browne (1992); Tucker et al. (1969); Wu & Browne (2015); Hu & Bentler (1998).
 
-**Returns:** the input object with class `"ggm_pe"` appended and a `population_error` element containing `method`, `metric`, `fit_value`, `achieved`, `fit` (CFI, TLI, RMSEA, and SRMR achieved), `delta`, `error`, `max_error`, `max_residual`, `R_difference`, and `iterations`. `R_difference` is near zero only when the error is orthogonal to the true network (`"cb"`).
+**Returns:** the input object with class `"ggm_pe"` appended and a `population_error` element containing `method`, `metric`, `fit_value`, `achieved`, `fit` (CFI, TLI, RMSEA, and SRMR achieved), `delta`, `error`, `max_error`, `R_difference`, and `iterations`. `R_difference` is near zero only when the error is orthogonal to the true network (`"cb"`). The `population` element has `R` updated (with error) and gains `Omega_pseudo` (pseudo-true network), `P` (partial correlations of `R`), and `discrepancy` (`Omega_pseudo - Omega`).
 
 ```r
 dm <- matrix(0.20, nrow = 3, ncol = 3)
@@ -193,7 +192,7 @@ sbm <- simulate_sbm(nodes = 6, blocks = 3, density_matrix = dm, sample_size = 10
 
 # True network fits at RMSEA = 0.05 using Wu & Browne (2015)
 result <- add_population_error(
-  sbm, method = "wb", metric = "RMSEA", fit_value = 0.05, max_residual = 0.20
+  sbm, method = "wb", metric = "RMSEA", fit_value = 0.05
 )
 ```
 

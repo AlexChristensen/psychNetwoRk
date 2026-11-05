@@ -10,7 +10,6 @@ add_population_error(
   method,
   metric = c("CFI", "TLI", "RMSEA", "SRMR"),
   fit_value = NULL,
-  max_residual = 0.1,
   tolerance = 0.01,
   max_iterations = 10,
   control = list()
@@ -79,12 +78,6 @@ Defaults to the conventional cutoff for the \code{metric}:
 \code{0.95} for \code{"CFI"} and \code{"TLI"}, \code{0.06} for
 \code{"RMSEA"}, and \code{0.08} for \code{"SRMR"}}
 
-\item{max_residual}{Numeric (length = 1).
-Maximum absolute error that can be added to any cell of the original
-population correlation matrix. If the target \code{fit_value} cannot be reached
-without exceeding this value, the closest solution is used (with a warning).
-Defaults to \code{0.10}}
-
 \item{tolerance}{Numeric (length = 1).
 Maximum absolute difference between the target \code{fit_value} and the
 \code{metric} of the population correlation matrix with error. Ensures that
@@ -129,10 +122,26 @@ population error follow:
 \item{parameters}{Parameters from the \code{ggm_object} input (unchanged)}
 
 \item{population}{
-A list containing the population parameters. \code{R} is the population
-correlation matrix with error added; all other elements are carried over from
+A list containing the population parameters. Elements carried over from
 the \code{ggm_object} input (e.g., \code{Omega}, the true network, and
-\code{membership} for \code{\link[psychNetwoRk]{simulate_sbm}})
+\code{membership} for \code{\link[psychNetwoRk]{simulate_sbm}}) are
+unchanged except for \code{R}. Added or updated elements:
+
+\itemize{
+
+\item \code{R} --- Population correlation matrix with error added
+
+\item \code{Omega_pseudo} --- Pseudo-true network (constrained maximum
+likelihood fit of the true network to the population correlation matrix
+with error)
+
+\item \code{P} --- Partial correlations of the population correlation
+matrix with error (dense in general)
+
+\item \code{discrepancy} --- Difference between the pseudo-true and true
+networks (\code{Omega_pseudo - Omega})
+
+}
 }
 
 \item{convergence}{Convergence information from the \code{ggm_object} input (unchanged)}
@@ -163,10 +172,7 @@ function corresponding to the achieved fit
 \item \code{error} --- Matrix of the error that was added to the
 original population correlation matrix
 
-\item \code{max_error} --- Largest absolute error that was added (never
-larger than \code{max_residual})
-
-\item \code{max_residual} --- Maximum absolute error allowed
+\item \code{max_error} --- Largest absolute error that was added
 
 \item \code{R_difference} --- Largest absolute difference between the
 original population correlation matrix and the known graph (constrained
@@ -197,15 +203,17 @@ population correlation matrix with error using constrained maximum
 likelihood (i.e., the known graph), equals \code{fit_value}. The fit indices
 are computed at the population level using the maximum likelihood
 discrepancy function between the population correlation matrix with error
-and the correlation matrix implied by the true network. The largest
-absolute error added to any cell of the original population correlation
-matrix is limited by \code{max_residual}.
+and the correlation matrix implied by the true network. The error added to
+any cell of the original population correlation matrix is limited to the
+range -1 to 1 and the population correlation matrix with error is always
+positive definite.
 
 Each optimization attempt uses new random starting values or random draws
 of the error (up to \code{max_iterations}) and the attempt closest to
 \code{fit_value} is returned. If \code{fit_value} cannot be reached within
-\code{tolerance} (e.g., because \code{max_residual} is too small), a warning
-is given and the closest solution is used
+\code{tolerance} (e.g., because the target requires more error than can be
+added while remaining positive definite), a warning is given and the closest
+solution is used
 }
 \examples{
 # Generate SBM data
@@ -220,18 +228,17 @@ sbm <- simulate_sbm(
 
 # Add population error (CFI = 0.95 using Cudeck and Browne)
 sbm_cfi <- add_population_error(ggm_object = sbm, method = "cb")
-
 \donttest{
-# Use Wu and Browne to target TLI = 0.90 with a larger maximum error
+# Use Wu and Browne to target TLI = 0.90
 sbm_wb <- add_population_error(
   ggm_object = sbm, method = "wb",
-  metric = "TLI", fit_value = 0.90, max_residual = 0.30
+  metric = "TLI", fit_value = 0.90
 )
 
-# Target RMSEA = 0.04 with a different maximum error
+# Target RMSEA = 0.04
 sbm_rmsea <- add_population_error(
   ggm_object = sbm, method = "cb", metric = "RMSEA",
-  fit_value = 0.04, max_residual = 0.20
+  fit_value = 0.04
 )
 
 # Generate small-world data and add population error

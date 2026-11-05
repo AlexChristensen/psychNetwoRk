@@ -236,29 +236,86 @@ CB_error_gradient <- function(error_vector, metric, target, reference, free_cell
 #' @noRd
 # Cudeck and Browne (1992) optimization
 # Updated 04.11.2026
-CB_optimize <- function(metric, target, reference, free_cells, nodes, df, max_residual, n = 8.3e09)
+CB_optimize <- function(
+    metric, target, reference, free_cells, nodes, df,
+    n = 8.3e09, tolerance = 0.01
+)
 {
 
-  # Random starting values (zero is a flat region of the cost)
-  start <- rnorm_ziggurat(length(free_cells)) * 0.005
+  # Random direction over free cells
+  # (random signs with magnitudes in [0.5, 1] keep the largest error close to
+  # the typical error so that more of the feasible range can be used)
+  direction <- shuffle_replace(c(-1, 1), length(free_cells)) *
+    runif_xoshiro(length(free_cells), min = 0.5, max = 1)
 
-  # Optimize error (largest absolute error is bounded by `max_residual`)
+  # Largest scale that keeps the errors within [-1, 1]
+  maximum_scale <- 1 / max(abs(direction))
+
+  # Largest scale that keeps the population matrix positive definite
+  # (R + scale * E is positive definite when scale * lambda_max(-L^-1 E L^-T) < 1)
+  error_matrix <- matrix(0, nodes, nodes)
+  error_matrix[free_cells] <- direction
+  error_matrix <- error_matrix + t(error_matrix)
+  inverse_chol <- backsolve(chol(reference$R), diag(nodes))
+  smallest <- min(
+    eigen(
+      crossprod(inverse_chol, error_matrix %*% inverse_chol),
+      symmetric = TRUE, only.values = TRUE
+    )$values
+  )
+  if(smallest < 0){
+    maximum_scale <- min(maximum_scale, 0.999 * -1 / smallest)
+  }
+
+  # Scale the direction to reach the target metric
+  scaled <- solve_scalar(
+    FUN = function(scale){
+      CB_error(direction * scale, reference, free_cells, nodes, df, n)
+    },
+    lower = 0, upper = maximum_scale,
+    metric = metric, target = target
+  )
+
+  # Check whether the target was reached
+  if(scaled$valid && abs(scaled[[metric]] - target) <= tolerance){
+    return(scaled)
+  }
+
+  # Otherwise, optimize error directly (errors are bounded by [-1, 1])
+  # starting from the closest valid scaled direction (zero is flat)
+  start_scale <- swiftelse(
+    scaled$valid, max(scaled$parameter, 0.01 * maximum_scale), 0.01 * maximum_scale
+  )
+
   optimization <- try(
     optim(
-      par = start, fn = CB_error_cost, gr = CB_error_gradient,
+      par = direction * start_scale,
+      fn = CB_error_cost, gr = CB_error_gradient,
       metric = metric, target = target, reference = reference,
       free_cells = free_cells, nodes = nodes, df = df, n = n,
-      method = "L-BFGS-B", lower = -max_residual, upper = max_residual
+      method = "L-BFGS-B", lower = -1, upper = 1
     ), silent = TRUE
   )
 
   # Check for errors
   if(is(optimization, "try-error")){
-    return(list(valid = FALSE))
+    return(scaled)
   }
 
-  # Return fit
-  return(CB_error(optimization$par, reference, free_cells, nodes, df, n))
+  # Obtain fit
+  fit <- CB_error(optimization$par, reference, free_cells, nodes, df, n)
+
+  # Return the solution closest to the target
+  if(
+    fit$valid && (
+      !scaled$valid ||
+      abs(fit[[metric]] - target) < abs(scaled[[metric]] - target)
+    )
+  ){
+    return(fit)
+  }else{
+    return(scaled)
+  }
 
 }
 
@@ -376,7 +433,7 @@ TKL_error <- function(weight, minor, R, network, df, n = 8.3e09)
 # Updated 04.11.2026
 TKL_optimize <- function(
     metric, target, R, network, nodes, df,
-    max_residual, minor_factors, decay, n = 8.3e09
+    minor_factors, decay, n = 8.3e09
 )
 {
 
@@ -395,10 +452,10 @@ TKL_optimize <- function(
   # Correlations from minor factors
   minor <- tcrossprod(loadings)
 
-  # Largest weight that keeps the maximum absolute error within `max_residual`
+  # Largest weight that keeps the errors within [-1, 1]
   # (error is linear in the weight: weight * (minor - R))
   maximum_weight <- min(
-    0.999, max_residual / max(abs((minor - R)[upper.tri(R)]))
+    0.999, 1 / max(abs((minor - R)[upper.tri(R)]))
   )
 
   # Return solution
@@ -417,7 +474,7 @@ TKL_optimize <- function(
 #' @noRd
 # Wu and Browne (2015) error function
 # Updated 04.11.2026
-WB_error <- function(log_dispersion, draws, R, network, df, max_residual, n = 8.3e09)
+WB_error <- function(log_dispersion, draws, R, network, df, n = 8.3e09)
 {
 
   # Obtain precision parameter (m = 1 / v)
@@ -434,10 +491,10 @@ WB_error <- function(log_dispersion, draws, R, network, df, max_residual, n = 8.
   factor_inverse <- forwardsolve(draws$cholesky %*% bartlett, diag(nodes))
   R_draw <- cov2cor(crossprod(factor_inverse))
 
-  # Scale error so that the maximum absolute error is within `max_residual`
+  # Scale error so that the errors are within [-1, 1]
   # (convex combination of positive definite matrices remains positive definite)
   error_matrix <- R_draw - R
-  error_matrix <- error_matrix * min(1, max_residual / max(abs(error_matrix)))
+  error_matrix <- error_matrix * min(1, 1 / max(abs(error_matrix)))
 
   # Population correlation matrix with error
   R_population <- R + error_matrix
@@ -450,7 +507,7 @@ WB_error <- function(log_dispersion, draws, R, network, df, max_residual, n = 8.
 #' @noRd
 # Wu and Browne (2015) optimization
 # Updated 04.11.2026
-WB_optimize <- function(metric, target, R, network, nodes, df, max_residual, n = 8.3e09)
+WB_optimize <- function(metric, target, R, network, nodes, df, n = 8.3e09)
 {
 
   # Random draws (held fixed while the dispersion is optimized)
@@ -466,7 +523,7 @@ WB_optimize <- function(metric, target, R, network, nodes, df, max_residual, n =
   return(
     solve_scalar(
       FUN = function(log_dispersion){
-        WB_error(log_dispersion, draws, R, network, df, max_residual, n)
+        WB_error(log_dispersion, draws, R, network, df, n)
       },
       lower = log(1e-06), upper = log(1 / nodes),
       metric = metric, target = target
@@ -518,7 +575,7 @@ HB_error <- function(size, omissions, network, df, n = 8.3e09)
 # Hu and Bentler (1998) optimization
 # Updated 04.11.2026
 HB_optimize <- function(
-    metric, target, R, network, nodes, df, max_residual,
+    metric, target, R, network, nodes, df,
     free_cells, omitted, n = 8.3e09
 )
 {
@@ -543,14 +600,14 @@ HB_optimize <- function(
     shift = omitted_edges * sqrt(tcrossprod(diag(precision)))
   )
 
-  # Check whether size is allowed (positive definite and within `max_residual`)
+  # Check whether size is allowed (positive definite and errors within [-1, 1])
   allowed <- function(size){
 
     # Obtain population correlation matrix
     R_population <- HB_population(size, omissions)
 
     # Return whether allowed
-    return(!is.null(R_population) && max(abs(R_population - R)) <= max_residual)
+    return(!is.null(R_population) && max(abs(R_population - R)) <= 1)
 
   }
 

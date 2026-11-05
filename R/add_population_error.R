@@ -15,15 +15,17 @@
 #' likelihood (i.e., the known graph), equals \code{fit_value}. The fit indices
 #' are computed at the population level using the maximum likelihood
 #' discrepancy function between the population correlation matrix with error
-#' and the correlation matrix implied by the true network. The largest
-#' absolute error added to any cell of the original population correlation
-#' matrix is limited by \code{max_residual}.
+#' and the correlation matrix implied by the true network. The error added to
+#' any cell of the original population correlation matrix is limited to the
+#' range -1 to 1 and the population correlation matrix with error is always
+#' positive definite.
 #'
 #' Each optimization attempt uses new random starting values or random draws
 #' of the error (up to \code{max_iterations}) and the attempt closest to
 #' \code{fit_value} is returned. If \code{fit_value} cannot be reached within
-#' \code{tolerance} (e.g., because \code{max_residual} is too small), a warning
-#' is given and the closest solution is used
+#' \code{tolerance} (e.g., because the target requires more error than can be
+#' added while remaining positive definite), a warning is given and the closest
+#' solution is used
 #'
 #' @param ggm_object Data object from \code{\link[psychNetwoRk]{simulate_sbm}} or
 #' \code{\link[psychNetwoRk]{simulate_smallworld}}
@@ -87,12 +89,6 @@
 #' \code{0.95} for \code{"CFI"} and \code{"TLI"}, \code{0.06} for
 #' \code{"RMSEA"}, and \code{0.08} for \code{"SRMR"}
 #'
-#' @param max_residual Numeric (length = 1).
-#' Maximum absolute error that can be added to any cell of the original
-#' population correlation matrix. If the target \code{fit_value} cannot be reached
-#' without exceeding this value, the closest solution is used (with a warning).
-#' Defaults to \code{0.10}
-#'
 #' @param tolerance Numeric (length = 1).
 #' Maximum absolute difference between the target \code{fit_value} and the
 #' \code{metric} of the population correlation matrix with error. Ensures that
@@ -136,10 +132,26 @@
 #' \item{parameters}{Parameters from the \code{ggm_object} input (unchanged)}
 #'
 #' \item{population}{
-#' A list containing the population parameters. \code{R} is the population
-#' correlation matrix with error added; all other elements are carried over from
+#' A list containing the population parameters. Elements carried over from
 #' the \code{ggm_object} input (e.g., \code{Omega}, the true network, and
-#' \code{membership} for \code{\link[psychNetwoRk]{simulate_sbm}})
+#' \code{membership} for \code{\link[psychNetwoRk]{simulate_sbm}}) are
+#' unchanged except for \code{R}. Added or updated elements:
+#'
+#' \itemize{
+#'
+#' \item \code{R} --- Population correlation matrix with error added
+#'
+#' \item \code{Omega_pseudo} --- Pseudo-true network (constrained maximum
+#' likelihood fit of the true network to the population correlation matrix
+#' with error)
+#'
+#' \item \code{P} --- Partial correlations of the population correlation
+#' matrix with error (dense in general)
+#'
+#' \item \code{discrepancy} --- Difference between the pseudo-true and true
+#' networks (\code{Omega_pseudo - Omega})
+#'
+#' }
 #' }
 #'
 #' \item{convergence}{Convergence information from the \code{ggm_object} input (unchanged)}
@@ -170,10 +182,7 @@
 #' \item \code{error} --- Matrix of the error that was added to the
 #' original population correlation matrix
 #'
-#' \item \code{max_error} --- Largest absolute error that was added (never
-#' larger than \code{max_residual})
-#'
-#' \item \code{max_residual} --- Maximum absolute error allowed
+#' \item \code{max_error} --- Largest absolute error that was added
 #'
 #' \item \code{R_difference} --- Largest absolute difference between the
 #' original population correlation matrix and the known graph (constrained
@@ -202,18 +211,17 @@
 #'
 #' # Add population error (CFI = 0.95 using Cudeck and Browne)
 #' sbm_cfi <- add_population_error(ggm_object = sbm, method = "cb")
-#'
 #' \donttest{
-#' # Use Wu and Browne to target TLI = 0.90 with a larger maximum error
+#' # Use Wu and Browne to target TLI = 0.90
 #' sbm_wb <- add_population_error(
 #'   ggm_object = sbm, method = "wb",
-#'   metric = "TLI", fit_value = 0.90, max_residual = 0.30
+#'   metric = "TLI", fit_value = 0.90
 #' )
 #'
-#' # Target RMSEA = 0.04 with a different maximum error
+#' # Target RMSEA = 0.04
 #' sbm_rmsea <- add_population_error(
 #'   ggm_object = sbm, method = "cb", metric = "RMSEA",
-#'   fit_value = 0.04, max_residual = 0.20
+#'   fit_value = 0.04
 #' )
 #'
 #' # Generate small-world data and add population error
@@ -257,7 +265,7 @@
 add_population_error <- function(
     ggm_object, method,
     metric = c("CFI", "TLI", "RMSEA", "SRMR"),
-    fit_value = NULL, max_residual = 0.10,
+    fit_value = NULL,
     tolerance = 0.01, max_iterations = 10,
     control = list()
 )
@@ -266,7 +274,7 @@ add_population_error <- function(
   # Check inputs
   inputs <- add_population_error_errors(
     ggm_object, method, metric, fit_value,
-    max_residual, tolerance, max_iterations, control
+    tolerance, max_iterations, control
   )
   method <- inputs$method
   metric <- inputs$metric
@@ -311,17 +319,17 @@ add_population_error <- function(
       method,
       "cb" = CB_optimize(
         metric, target, reference, free_cells,
-        nodes, df, max_residual
+        nodes, df, tolerance = tolerance
       ),
       "tkl" = TKL_optimize(
-        metric, target, R, network, nodes, df, max_residual,
+        metric, target, R, network, nodes, df,
         control$minor_factors, control$decay
       ),
       "wb" = WB_optimize(
-        metric, target, R, network, nodes, df, max_residual
+        metric, target, R, network, nodes, df
       ),
       "hb" = HB_optimize(
-        metric, target, R, network, nodes, df, max_residual,
+        metric, target, R, network, nodes, df,
         free_cells, control$omitted
       )
     )
@@ -372,23 +380,13 @@ add_population_error <- function(
   # Check for convergence
   if(best_difference > tolerance){
 
-    # Check whether the maximum error was the limiting factor
-    limit_text <- swiftelse(
-      max_error >= max_residual * (1 - 1e-06),
-      paste0(
-        " The largest absolute error reached `max_residual` = ",
-        max_residual, ". Try increasing `max_residual`."
-      ),
-      ""
-    )
-
     warning(
       paste0(
         "Convergence counter has exceeded its limit. ",
         "There were issues converging to the target ", metric, " = ", target,
         " within `tolerance` = ", tolerance, ". \n\n",
         "Using the solution with the closest ", metric, " = ",
-        round(best$fit[[metric]], 4), ".", limit_text
+        round(best$fit[[metric]], 4), "."
       ), call. = FALSE
     )
 
@@ -411,9 +409,22 @@ add_population_error <- function(
     skew = ggm_object$parameters$skew, skew_range = NULL
   )
 
+  # Pseudo-true network (constrained ML fit of the true graph)
+  pseudo_true <- known$network
+  dimnames(pseudo_true) <- dimnames(R)
+
+  # Population partial correlations (dense in general)
+  population_partials <- -cov2cor(chol2inv(chol(R_population)))
+  diag(population_partials) <- 0
+  dimnames(population_partials) <- dimnames(R)
+
   # Update population
   population <- ggm_object$population
   population$R <- R_population
+  population$Omega_pseudo <- pseudo_true
+  population$P <- population_partials
+  population$discrepancy <- pseudo_true - network
+  dimnames(population$discrepancy) <- dimnames(R)
 
   # Populate results
   # (same elements and order as `simulate_sbm` and `simulate_smallworld`,
@@ -433,7 +444,6 @@ add_population_error <- function(
       delta = fit$discrepancy,
       error = R_population - R,
       max_error = max_error,
-      max_residual = max_residual,
       R_difference = R_difference,
       iterations = best$iterations
     ),
@@ -453,7 +463,7 @@ add_population_error <- function(
 # Updated 04.11.2026
 add_population_error_errors <- function(
     ggm_object, method, metric, fit_value,
-    max_residual, tolerance, max_iterations, control
+    tolerance, max_iterations, control
 )
 {
 
@@ -547,18 +557,6 @@ add_population_error_errors <- function(
     )
   }
 
-  # Check maximum residual
-  typeof_error(max_residual, c("integer", "double"), "add_population_error")
-  length_error(max_residual, 1, "add_population_error")
-  if(!is.finite(max_residual) || max_residual <= 0){
-    stop(
-      paste0(
-        "`max_residual` = ", max_residual, " is not valid.",
-        "\n\nNumeric `max_residual` must be greater than 0"
-      )
-    )
-  }
-
   # Check tolerance and maximum iterations
   typeof_error(tolerance, c("integer", "double"), "add_population_error")
   length_error(tolerance, 1, "add_population_error")
@@ -617,5 +615,5 @@ add_population_error_errors <- function(
 # ggm_object <- simulate_sbm(
 #   nodes = 6, blocks = 3, density_matrix = dm, sample_size = 1000
 # )
-# method = "cb"; metric = "CFI"; fit_value = NULL; max_residual = 0.10
+# method = "cb"; metric = "CFI"; fit_value = NULL
 # tolerance = 0.001; max_iterations = 10; control = list()
