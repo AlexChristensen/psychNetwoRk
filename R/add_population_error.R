@@ -261,10 +261,11 @@
 #' @export
 #'
 # Add population error to simulated data ----
-# Updated 04.11.2026
+# Updated 06.11.2026
 add_population_error <- function(
-    ggm_object, method,
-    metric = c("CFI", "TLI", "RMSEA", "SRMR"),
+    ggm_object,
+    method = c("cb", "tkl", "wb", "hb"),
+    metric = c("cfi", "tli", "rmsea", "srmr"),
     fit_value = NULL,
     tolerance = 0.01, max_iterations = 10,
     control = list()

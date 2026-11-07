@@ -7,8 +7,8 @@
 \usage{
 add_population_error(
   ggm_object,
-  method,
-  metric = c("CFI", "TLI", "RMSEA", "SRMR"),
+  method = c("cb", "tkl", "wb", "hb"),
+  metric = c("cfi", "tli", "rmsea", "srmr"),
   fit_value = NULL,
   tolerance = 0.01,
   max_iterations = 10,
