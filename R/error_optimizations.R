@@ -473,7 +473,7 @@ TKL_optimize <- function(
 
 #' @noRd
 # Wu and Browne (2015) error function
-# Updated 04.11.2026
+# Updated 07.11.2026
 WB_error <- function(log_dispersion, draws, R, network, df, n = 8.3e09)
 {
 
@@ -485,9 +485,12 @@ WB_error <- function(log_dispersion, draws, R, network, df, n = 8.3e09)
   bartlett <- draws$normals
   diag(bartlett) <- sqrt(qchisq(draws$uniforms, df = precision - seq_len(nodes) + 1))
 
-  # Inverted Wishart draw centered on R
+  # Wishart draw on the precision matrix, centered on the original precision
+  # matrix (E[W] = R^-1), which is an inverted Wishart draw for the covariance
   #   Sigma = W^-1, W ~ Wishart(m, R^-1 / m)
-  # (scalar multiples are removed when converted to a correlation matrix)
+  # Other centerings (e.g., E[Sigma] = R, which uses scale R^-1 / (m - p - 1))
+  # differ only by a scalar multiple of W, which is removed when converted to
+  # a correlation matrix, so the resulting draws are identical
   factor_inverse <- forwardsolve(draws$cholesky %*% bartlett, diag(nodes))
   R_draw <- cov2cor(crossprod(factor_inverse))
 

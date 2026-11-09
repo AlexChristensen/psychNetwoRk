@@ -167,7 +167,7 @@ Perturbs the population correlation matrix of a `simulate_sbm()` or `simulate_sm
 |---|---|
 | `"cb"` | Cudeck & Browne (1992): error on the cells the true network constrains to zero (orthogonal to the network) |
 | `"tkl"` | Tucker, Koopman, & Linn (1969): random minor factors with geometrically decaying loadings; the proportion of variance from minor factors is optimized |
-| `"wb"` | Wu & Browne (2015): inverted-Wishart draw centered on the original matrix; the dispersion (approximately RMSEA$^2$) is optimized |
+| `"wb"` | Wu & Browne (2015): inverted-Wishart draw (Wishart on the precision matrix, centered on the original precision matrix); the dispersion (approximately RMSEA$^2$) is optimized |
 | `"hb"` | Hu & Bentler (1998): underparameterized misspecification; a random subset of the network's zero edges is non-zero in the population and their size is optimized |
 
 | Argument | Description |

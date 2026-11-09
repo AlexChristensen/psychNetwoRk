@@ -37,8 +37,12 @@ geometrically. The proportion of variance attributed to the minor factors
 is optimized
 
 \item \code{"wb"} --- Wu and Browne (2015). The population correlation
-matrix with error is a random draw from an inverted Wishart distribution
-centered on the original population correlation matrix. The dispersion
+matrix with error is the inverse of a Wishart draw for the precision matrix
+(i.e., an inverted Wishart draw for the covariance matrix), where the
+Wishart is centered on the original (sparse) precision matrix and the result
+is standardized to a correlation matrix. Alternative scalings of the
+centering (e.g., centering the covariance rather than the precision matrix)
+give identical results after standardization. The dispersion
 of the distribution is optimized
 
 \item \code{"hb"} --- Hu and Bentler (1998). Underparameterized
