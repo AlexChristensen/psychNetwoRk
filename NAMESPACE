@@ -4,6 +4,7 @@ S3method(print,ggm_simulate)
 S3method(summary,ggm_simulate)
 export(add_population_error)
 export(categorize)
+export(network_fit)
 export(proxswap_lattice)
 export(simulate_sbm)
 export(simulate_smallworld)
@@ -14,6 +15,7 @@ importFrom(stats,
   cov2cor,
   optim,
   optimize,
+  pchisq,
   qchisq,
   setNames,
   uniroot

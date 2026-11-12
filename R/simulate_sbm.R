@@ -272,7 +272,7 @@
 #'   sample_size = 500,
 #'   density_matrix = dm
 #' )
-#'
+#' \donttest{
 #' # Unequal block sizes
 #' result <- simulate_sbm(
 #'   nodes = c(4, 6, 8), # 18 total nodes
@@ -323,6 +323,7 @@
 #'   density_matrix = dm,
 #'   diffusion_range = c(0.30, 0.70)
 #' )
+#' }
 #'
 #' @author Alexander P. Christensen <alexpaulchristensen@gmail.com>
 #'

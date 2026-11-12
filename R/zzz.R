@@ -1,8 +1,3 @@
-.onload <- function(libname, pkgname)
-{
-    library.dynam("psychNetwoRk",package=pkgname,lib.loc=libname)
-}
-
 .onAttach <- function(libname, pkgname)
 {
     msg <- styletext(styletext(paste("\npsychNetwoRk (version ", utils::packageVersion("psychNetwoRk"), ")", sep = ""), defaults = "underline"), defaults = "bold")

@@ -3,6 +3,15 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 #' @noRd
+# Population size for population-level fit ----
+# Approximate number of people on Earth (8.3 billion), treated as the
+# "population" when computing population fit indices. Chi-square, CFI, TLI,
+# and RMSEA depend on sample size, so the population fit is evaluated at this
+# (finite but very large) sample size, which is within ~1e-8 of the n -> Inf limit
+# Updated 11.11.2026
+population_size <- 8.3e09
+
+#' @noRd
 # Numeric vector/matrix output apply ----
 # Updated 06.07.2023
 nvapply <- function(X, FUN, ..., LENGTH = 1, USE.NAMES = TRUE)

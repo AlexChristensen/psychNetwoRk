@@ -178,7 +178,7 @@ Perturbs the population correlation matrix of a `simulate_sbm()` or `simulate_sm
 | `fit_value` | Target value of `metric` in $(0, 1)$; default is the conventional cutoff (CFI/TLI `0.95`, RMSEA `0.06`, SRMR `0.08`) |
 | `tolerance` | Maximum absolute difference between `fit_value` and the achieved `metric`; default `0.01` |
 | `max_iterations` | Maximum optimization attempts (random starts or draws); default `10` |
-| `control` | Method options: `minor_factors` (`max(50, 2 * nodes)`) and `decay` (`0.02`) for `"tkl"`; `omitted` (`0.10`, proportion of zero edges) for `"hb"` |
+| `control` | Method options: `minor_factors` (`max(50, 2 * nodes)`) and `decay` (`0.30`) for `"tkl"`; `omitted` (`0.10`, proportion of zero edges) for `"hb"` |
 
 **References:** Cudeck & Browne (1992); Tucker et al. (1969); Wu & Browne (2015); Hu & Bentler (1998).
 

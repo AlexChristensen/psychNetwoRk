@@ -56,7 +56,7 @@ reference_model <- function(R)
 #' @noRd
 # Fit indices of a model-implied matrix to a population matrix
 # Updated 04.11.2026
-fit_indices <- function(R_population, reference, df, n = 8.3e09)
+fit_indices <- function(R_population, reference, df, n = population_size)
 {
 
   # Obtain number of nodes
@@ -97,11 +97,9 @@ fit_indices <- function(R_population, reference, df, n = 8.3e09)
     return(list(valid = FALSE))
   }
 
-  # Standardized root mean square residual (lower triangle with diagonal)
+  # Standardized root mean square residual (off-diagonal lower triangle only)
   residual <- R_population - reference$R
-  SRMR <- sqrt(
-    sum(residual[lower.tri(residual, diag = TRUE)]^2) / (nodes * (nodes + 1) / 2)
-  )
+  SRMR <- sqrt(mean(residual[lower.tri(residual)]^2))
 
   # Return fit
   return(
@@ -123,7 +121,7 @@ fit_indices <- function(R_population, reference, df, n = 8.3e09)
 #' @noRd
 # Cudeck and Browne (1992) error function
 # Updated 04.11.2026
-CB_error <- function(error_vector, reference, free_cells, nodes, df, n = 8.3e09)
+CB_error <- function(error_vector, reference, free_cells, nodes, df, n = population_size)
 {
 
   # Set up error matrix (only free cells)
@@ -141,7 +139,7 @@ CB_error <- function(error_vector, reference, free_cells, nodes, df, n = 8.3e09)
 #' @noRd
 # Cudeck and Browne (1992) cost function
 # Updated 04.11.2026
-CB_error_cost <- function(error_vector, metric, target, reference, free_cells, nodes, df, n = 8.3e09)
+CB_error_cost <- function(error_vector, metric, target, reference, free_cells, nodes, df, n = population_size)
 {
 
   # Obtain fit
@@ -160,7 +158,7 @@ CB_error_cost <- function(error_vector, metric, target, reference, free_cells, n
 #' @noRd
 # Cudeck and Browne (1992) gradient function
 # Updated 04.11.2026
-CB_error_gradient <- function(error_vector, metric, target, reference, free_cells, nodes, df, n = 8.3e09)
+CB_error_gradient <- function(error_vector, metric, target, reference, free_cells, nodes, df, n = population_size)
 {
 
   # Obtain fit
@@ -222,7 +220,7 @@ CB_error_gradient <- function(error_vector, metric, target, reference, free_cell
         matrix(0, nrow = nodes, ncol = nodes)
       }else{
         (fit$R_population - reference$R) /
-          (fit$SRMR * nodes * (nodes + 1) / 2)
+          (fit$SRMR * nodes * (nodes - 1) / 2)
       }
 
     }
@@ -238,7 +236,7 @@ CB_error_gradient <- function(error_vector, metric, target, reference, free_cell
 # Updated 04.11.2026
 CB_optimize <- function(
     metric, target, reference, free_cells, nodes, df,
-    n = 8.3e09, tolerance = 0.01
+    n = population_size, tolerance = 0.01
 )
 {
 
@@ -322,7 +320,7 @@ CB_optimize <- function(
 #' @noRd
 # Fit indices of the known graph (constrained maximum likelihood)
 # Updated 04.11.2026
-refit_indices <- function(R_population, network, df, n = 8.3e09)
+refit_indices <- function(R_population, network, df, n = population_size)
 {
 
   # Obtain known graph
@@ -416,7 +414,7 @@ solve_scalar <- function(FUN, lower, upper, metric, target, grid_size = 20)
 #' @noRd
 # Tucker, Koopman, and Linn (1969) error function
 # Updated 04.11.2026
-TKL_error <- function(weight, minor, R, network, df, n = 8.3e09)
+TKL_error <- function(weight, minor, R, network, df, n = population_size)
 {
 
   # Population correlation matrix with error
@@ -433,7 +431,7 @@ TKL_error <- function(weight, minor, R, network, df, n = 8.3e09)
 # Updated 04.11.2026
 TKL_optimize <- function(
     metric, target, R, network, nodes, df,
-    minor_factors, decay, n = 8.3e09
+    minor_factors, decay, n = population_size
 )
 {
 
@@ -474,7 +472,7 @@ TKL_optimize <- function(
 #' @noRd
 # Wu and Browne (2015) error function
 # Updated 07.11.2026
-WB_error <- function(log_dispersion, draws, R, network, df, n = 8.3e09)
+WB_error <- function(log_dispersion, draws, R, network, df, n = population_size)
 {
 
   # Obtain precision parameter (m = 1 / v)
@@ -510,7 +508,7 @@ WB_error <- function(log_dispersion, draws, R, network, df, n = 8.3e09)
 #' @noRd
 # Wu and Browne (2015) optimization
 # Updated 04.11.2026
-WB_optimize <- function(metric, target, R, network, nodes, df, n = 8.3e09)
+WB_optimize <- function(metric, target, R, network, nodes, df, n = population_size)
 {
 
   # Random draws (held fixed while the dispersion is optimized)
@@ -558,7 +556,7 @@ HB_population <- function(size, omissions)
 #' @noRd
 # Hu and Bentler (1998) error function
 # Updated 04.11.2026
-HB_error <- function(size, omissions, network, df, n = 8.3e09)
+HB_error <- function(size, omissions, network, df, n = population_size)
 {
 
   # Population correlation matrix with error
@@ -579,7 +577,7 @@ HB_error <- function(size, omissions, network, df, n = 8.3e09)
 # Updated 04.11.2026
 HB_optimize <- function(
     metric, target, R, network, nodes, df,
-    free_cells, omitted, n = 8.3e09
+    free_cells, omitted, n = population_size
 )
 {
 

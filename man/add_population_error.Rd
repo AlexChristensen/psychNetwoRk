@@ -72,6 +72,7 @@ Available options:
 \item \code{"RMSEA"} --- Root mean square error of approximation
 
 \item \code{"SRMR"} --- Standardized root mean square residual
+(computed over the off-diagonal elements of the correlation matrices)
 
 }}
 
@@ -105,7 +106,40 @@ ignored. Available options:
 
 \item \code{decay} --- Geometric decay (\eqn{\epsilon}) of the minor factor
 loadings for \code{method = "tkl"}. Must be between 0 and 1.
-Defaults to \code{0.02}
+The loading of minor factor \eqn{k} is multiplied by
+\eqn{(1 - \epsilon)^{k - 1}}, so the variance it contributes is proportional
+to \eqn{(1 - \epsilon)^{2(k - 1)}}. \code{decay} therefore controls how
+concentrated the error is across the minor factors:
+
+\itemize{
+
+\item \emph{Smaller values} (e.g., \code{0.02}) --- Minor factors decay
+slowly, so many of them contribute about equally. The error approaches
+diffuse, unstructured noise (the minor-factor correlation matrix
+approaches an identity matrix) and its main effect is to attenuate
+the correlations of the original population uniformly. This
+resembles very many unrelated, tiny influences and
+yields little coherent structure in the error
+
+\item \emph{Larger values} (e.g., \code{0.30}, the default) --- Minor factors
+decay quickly, so a handful of factors dominate the error. The error is
+more structured: groups of variables share small unmodeled common causes
+(e.g., method or wording effects, omitted variables), which is more like
+the misspecification expected in psychometric data. The same amount of
+misfit is carried by fewer, larger error correlations and less attenuation
+of the original correlations
+
+\item \emph{Very large values} (e.g., \code{> 0.60}) --- Essentially one or two
+minor factors carry all of the error, which produces a few large
+error correlations that may be unrealistic as general population
+error and can make the target \code{fit_value} harder to reach
+within the error bounds (\eqn{[-1, 1]})
+
+}
+
+The \code{minor_factors} option matters little once \code{decay} is large
+because later factors contribute negligible variance.
+Defaults to \code{0.30}
 
 \item \code{omitted} --- Proportion of the zero edges in the true network
 that are omitted edges for \code{method = "hb"}. At least one edge is always
@@ -168,7 +202,8 @@ A list containing the parameters used to generate population error:
 fit to the population correlation matrix with error
 
 \item \code{fit} --- Named vector of all fit indices (\code{CFI},
-\code{TLI}, \code{RMSEA}, and \code{SRMR}) achieved
+\code{TLI}, \code{RMSEA}, and \code{SRMR}) achieved, obtained from
+\code{\link{network_fit}} for the known graph
 
 \item \code{delta} --- Minimum of the (maximum likelihood) discrepancy
 function corresponding to the achieved fit
@@ -211,6 +246,11 @@ and the correlation matrix implied by the true network. The error added to
 any cell of the original population correlation matrix is limited to the
 range -1 to 1 and the population correlation matrix with error is always
 positive definite.
+
+Because chi-square-based indices (CFI, TLI, and RMSEA) depend on sample
+size, the population-level fit is evaluated at the size of the human
+population (approximately 8.3 billion). At this size, the fit indices are
+within about \eqn{10^{-8}} of their large-sample limits
 
 Each optimization attempt uses new random starting values or random draws
 of the error (up to \code{max_iterations}) and the attempt closest to
