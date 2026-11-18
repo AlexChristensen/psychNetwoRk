@@ -71,9 +71,7 @@
 #'
 #' @param sample_size Numeric (length = 1).
 #' Number of observations to generate from the population multivariate
-#' normal distribution. Also influences the predicted Weibull scale
-#' parameter via \code{\link{weibull_parameters}}: larger samples are
-#' associated with smaller, more precisely estimated edge weights.
+#' normal distribution.
 #'
 #' @param skew Numeric (length = 1 or \code{nodes}).
 #' Skew applied to each variable after generation from the multivariate
@@ -406,7 +404,7 @@ simulate_smallworld <- function(
     # Try to get good weights
     output <- try(
       smallworld_weights(
-        A, pruned_lattice, nodes, sample_size,
+        A, pruned_lattice, nodes,
         snr, negative_proportion, target_condition,
         max_correlation, lower_triangle
       ), silent = TRUE
@@ -767,9 +765,9 @@ smallworld_generate <- function(lattice, rewire, lower_triangle)
 
 #' @noRd
 # Smallworld weight generation ----
-# Updated 13.04.2026
+# Updated 18.11.2026
 smallworld_weights <- function(
-    A, lattice, nodes, sample_size,
+    A, lattice, nodes,
     snr, negative_proportion, target_condition,
     max_correlation, lower_triangle
 )
@@ -813,7 +811,7 @@ smallworld_weights <- function(
   network <- matrix(0, nrow = nodes, ncol = nodes)
 
   # Generate edges (returned edges are sorted)
-  edges <- generate_edges(nonzero = sum(nonzero), n = sample_size, p = nodes, snr = snr)
+  edges <- generate_edges(nonzero = sum(nonzero), p = nodes, snr = snr)
 
   # Set weights order
   # Follows: Muldoon, Bridgeford, & Bassett's (2016) implementation

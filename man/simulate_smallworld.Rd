@@ -68,9 +68,7 @@ mean = 0.34, SD = 0.086, bounded to \eqn{[0.083, 0.50]}.}
 
 \item{sample_size}{Numeric (length = 1).
 Number of observations to generate from the population multivariate
-normal distribution. Also influences the predicted Weibull scale
-parameter via \code{\link{weibull_parameters}}: larger samples are
-associated with smaller, more precisely estimated edge weights.}
+normal distribution.}
 
 \item{skew}{Numeric (length = 1 or \code{nodes}).
 Skew applied to each variable after generation from the multivariate

@@ -5,7 +5,7 @@
 
 ## Overview
 
-This package simulates multivariate normal data from **Gaussian graphical models** (GGMs) with realistic psychometric network structure. Two topology generators are included: `simulate_smallworld()` produces small-world networks via degree-weighted Watts-Strogatz rewiring, and `simulate_sbm()` produces community-structured networks via a stochastic block model. Both are calibrated to edge weight distributions empirically observed across 194 psychometric networks (Huth et al., 2025) through `weibull_parameters()`, a Seemingly Unrelated Regression model that predicts Weibull shape and scale from network size, sample size, and signal-to-noise ratio.
+This package simulates multivariate normal data from **Gaussian graphical models** (GGMs) with realistic psychometric network structure. Two topology generators are included: `simulate_smallworld()` produces small-world networks via degree-weighted Watts-Strogatz rewiring, and `simulate_sbm()` produces community-structured networks via a stochastic block model. Both are calibrated to edge weight distributions empirically observed across 194 psychometric networks (Huth et al., 2025) through `weibull_parameters()`, a Seemingly Unrelated Regression model that predicts Weibull shape and scale from network size and signal-to-noise ratio.
 
 Additional tools include `smallworldness()` (small-world network metrics), `proxswap_lattice()` (proximity-swap ring lattice construction), `categorize()` (categorizing continuous data with skew), and `add_population_error()` (adds population/model error so that the true network fits at a target CFI, TLI, RMSEA, or SRMR using one of four methods).
 
@@ -132,28 +132,24 @@ result <- simulate_sbm(
 <details>
 <summary><strong><code>weibull_parameters()</code> — Empirically calibrated edge weight distribution</strong></summary>
 
-Predicts the Weibull shape $k$ and scale $\lambda_W$ that characterize absolute partial correlation edge weights for a network of given size and sample size. Predictions come from a Seemingly Unrelated Regression (SUR) model fitted to 194 empirical psychometric networks (Huth et al., 2025), where absolute partial correlations were found to follow a Weibull distribution more consistently than Beta, Gamma, or log-normal alternatives.
+Predicts the Weibull shape $k$ and scale $\lambda_W$ that characterize absolute partial correlation edge weights for a network of given size and signal-to-noise ratio. Predictions come from a Seemingly Unrelated Regression (SUR) model fitted to 194 empirical psychometric networks (Huth et al., 2025), where absolute partial correlations were found to follow a Weibull distribution more consistently than Beta, Gamma, or log-normal alternatives.
 
-**Predictors.** The two SUR equations have an asymmetric structure:
+**Predictors.** Both SUR equations use the same two predictors: `snr` and `rlp` $= 1/\log(p)$, capturing the diminishing marginal effect of network size on weight distributions. Shape governs the spread of the edge weight distribution and scale governs the typical magnitude of edge weights. Sample size is not a predictor, so the predicted parameters describe the population edge weight distribution independent of sampling precision.
 
-- **Shape** is predicted from `snr` and `rlp` $= 1/\log(p)$, capturing the diminishing marginal effect of network size on weight concentration. Shape governs the spread of the edge weight distribution and is not affected by sampling precision.
-- **Scale** is predicted from `snr`, `rlp`, and `scaling` $= \sqrt{1/(n - p - 2)}$ (the standard error of partial correlations). Scale governs the typical magnitude of edge weights and is directly affected by estimation precision.
-
-**Model fit.** Shape: $R^2 = 0.887$, RMSE $= 0.048$. Scale: $R^2 = 0.885$, RMSE $= 0.011$. Residual correlation between equations: $0.261$ (motivating SUR). Empirical ranges: shape $\in [0.72, 1.63]$ (M $= 1.07$, SD $= 0.14$); scale $\in [0.03, 0.19]$ (M $= 0.10$, SD $= 0.03$).
+**Model fit.** Shape: $R^2 = 0.887$, RMSE $= 0.048$. Scale: $R^2 = 0.885$, RMSE $= 0.014$. Residual correlation between equations: $0.330$ (motivating SUR). Empirical ranges: shape $\in [0.72, 1.63]$ (M $= 1.07$, SD $= 0.14$); scale $\in [0.03, 0.19]$ (M $= 0.10$, SD $= 0.03$).
 
 | Argument | Description |
 |---|---|
 | `nodes` | Number of nodes (8–54 to stay within empirical training range) |
-| `sample_size` | Sample size of the dataset |
 | `snr` | Signal-to-noise ratio $\bar{\lvert w \rvert} / \mathrm{SD}(\lvert w \rvert)$; default `1` |
 | `bootstrap` | If `TRUE`, adds a sampled SUR residual — use in simulation for replication-to-replication variability |
 
 ```r
-# Predicted parameters for a 15-node network, n = 300
-weibull_parameters(nodes = 15, sample_size = 300)
+# Predicted parameters for a 15-node network
+weibull_parameters(nodes = 15)
 
 # With bootstrapped residuals for Monte Carlo simulation
-weibull_parameters(nodes = 15, sample_size = 300, bootstrap = TRUE)
+weibull_parameters(nodes = 15, bootstrap = TRUE)
 ```
 
 </details>

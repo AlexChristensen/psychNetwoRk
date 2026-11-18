@@ -51,8 +51,8 @@
 #' the same SNR can arise from different combinations of mean and standard
 #' deviation (e.g., mean = 0.05, SD = 0.05 and mean = 0.15, SD = 0.15 both
 #' give SNR = 1), so SNR alone does not determine the absolute magnitude of
-#' edge weights, which is additionally governed by \code{nodes} and
-#' \code{sample_size} via \code{\link{weibull_parameters}}. Empirically
+#' edge weights, which is additionally governed by \code{nodes}
+#' via \code{\link{weibull_parameters}}. Empirically
 #' observed SNR values ranged from 0.648 to 1.712; values outside this range
 #' are accepted but will trigger a warning. Defaults to \code{1}.
 #'
@@ -91,9 +91,7 @@
 #'
 #' @param sample_size Numeric (length = 1).
 #' Number of observations to generate from the population multivariate
-#' distribution. Also influences the predicted Weibull scale parameter via
-#' \code{\link{weibull_parameters}}: larger samples are associated with
-#' smaller, more precisely estimated edge weights.
+#' distribution.
 #'
 #' @param skew Numeric (length = 1 or \code{sum(nodes)}).
 #' Skew applied to each variable after generation from the multivariate
@@ -473,7 +471,7 @@ simulate_sbm <- function(
     # Try to get good weights
     output <- try(
       sbm_weights(
-        block_matrix, membership, membership_matrix, sample_size,
+        block_matrix, membership, membership_matrix,
         snr, total_nodes, negative_proportion,
         diffusion, diffusion_range, target_condition,
         max_correlation, lower_triangle
@@ -718,9 +716,9 @@ generate_sbm <- function(
 
 #' @noRd
 # SBM weight generation ----
-# Updated 14.03.2026
+# Updated 18.11.2026
 sbm_weights <- function(
-    block_matrix, membership, membership_matrix, sample_size,
+    block_matrix, membership, membership_matrix,
     snr, total_nodes, negative_proportion,
     diffusion, diffusion_range, target_condition,
     max_correlation, lower_triangle
@@ -746,7 +744,7 @@ sbm_weights <- function(
 
   # Generate edges (returned edges are sorted)
   total_edges <- sum(block_lower)
-  edges <- generate_edges(nonzero = total_edges, n = sample_size, p = total_nodes, snr = snr)
+  edges <- generate_edges(nonzero = total_edges, p = total_nodes, snr = snr)
 
   # Obtain edges
   within_index <- membership_lower & block_lower

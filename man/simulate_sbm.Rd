@@ -51,8 +51,8 @@ values above 1 produce narrower, more homogeneous distributions. Note that
 the same SNR can arise from different combinations of mean and standard
 deviation (e.g., mean = 0.05, SD = 0.05 and mean = 0.15, SD = 0.15 both
 give SNR = 1), so SNR alone does not determine the absolute magnitude of
-edge weights, which is additionally governed by \code{nodes} and
-\code{sample_size} via \code{\link{weibull_parameters}}. Empirically
+edge weights, which is additionally governed by \code{nodes}
+via \code{\link{weibull_parameters}}. Empirically
 observed SNR values ranged from 0.648 to 1.712; values outside this range
 are accepted but will trigger a warning. Defaults to \code{1}.}
 
@@ -91,9 +91,7 @@ bounded to \eqn{[0.083, 0.55]}.}
 
 \item{sample_size}{Numeric (length = 1).
 Number of observations to generate from the population multivariate
-distribution. Also influences the predicted Weibull scale parameter via
-\code{\link{weibull_parameters}}: larger samples are associated with
-smaller, more precisely estimated edge weights.}
+distribution.}
 
 \item{skew}{Numeric (length = 1 or \code{sum(nodes)}).
 Skew applied to each variable after generation from the multivariate

@@ -22,8 +22,8 @@ weibull_xoshiro <- function(n, shape, scale)
 
 #' @noRd
 # Generate edge values
-# Updated 16.03.2026
-generate_edges <- function(nonzero, n, p, snr)
+# Updated 18.11.2026
+generate_edges <- function(nonzero, p, snr)
 {
 
   # Calculate possible edges
@@ -36,7 +36,7 @@ generate_edges <- function(nonzero, n, p, snr)
   while(greater_than){
 
     # Generate Weibull parameters
-    params <- weibull_parameters(nodes = p, sample_size = n, snr = snr, bootstrap = TRUE)
+    params <- weibull_parameters(nodes = p, snr = snr, bootstrap = TRUE)
 
     # Check outside of bounds
     if(check_bounds(params[["shape"]], params[["scale"]])){

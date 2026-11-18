@@ -3,7 +3,7 @@
 #' @description
 #' Predicts the shape and scale parameters of a Weibull distribution that
 #' characterizes the absolute partial correlation edge weights of a psychometric
-#' network, given its number of nodes and sample size. Parameter estimates are
+#' network, given its number of nodes and signal-to-noise ratio. Parameter estimates are
 #' derived from a Seemingly Unrelated Regression (SUR) model fitted to empirical
 #' network data from Huth et al. (2025), where absolute partial correlations were
 #' found to follow a Weibull distribution more consistently than Beta, Gamma, or
@@ -13,9 +13,6 @@
 #' The number of nodes (variables) in the network.
 #' Must be between 8 and 54, reflecting the range of the empirical networks
 #' used to fit the underlying SUR model.
-#'
-#' @param sample_size Numeric (length = 1).
-#' The sample size of the dataset from which the network is estimated.
 #'
 #' @param snr Numeric (length = 1).
 #' Signal-to-noise ratio of partial correlations (\eqn{\bar{|w|} / \mathrm{SD}(|w|)}).
@@ -30,39 +27,28 @@
 #' bootstrapping contexts. Defaults to \code{FALSE}.
 #'
 #' @details
-#' The shape and scale parameters are predicted from derived network descriptors
-#' that differ between the two SUR equations:
+#' The shape and scale parameters are predicted from two network descriptors
+#' used in both SUR equations:
 #'
 #' \describe{
+#'   \item{\code{snr}}{The signal-to-noise ratio of the absolute partial
+#'     correlations, \eqn{\bar{|w|} / \mathrm{SD}(|w|)}.}
 #'   \item{\code{rlp}}{The reciprocal log of the number of nodes,
 #'     \eqn{1 / \log(p)}, capturing the diminishing marginal effect of network
-#'     size on edge weight distributions. Used in both the shape and scale
-#'     equations.}
-#'   \item{\code{scaling}}{The standard error of partial correlations defined as
-#'     \eqn{\sqrt{1 / (n - p)}}, where \eqn{n} is the sample size and
-#'     \eqn{p} is the number of nodes. Larger values indicate greater sampling
-#'     uncertainty in the partial correlation estimates. Used in the scale
-#'     equation only.}
+#'     size on edge weight distributions.}
 #' }
 #'
-#' The two SUR equations have an asymmetric structure reflecting different
-#' theoretical roles for sampling precision. Shape — which governs the
-#' concentration of the edge weight distribution — is determined solely by
-#' signal characteristics of the network via \code{snr} and \code{rlp}.
-#' Scale — which governs the typical magnitude of edge weights — additionally
-#' depends on \code{scaling}, as the expected size of partial correlations is
-#' directly affected by estimation precision. This asymmetry is both
-#' empirically supported (dropping \code{scaling} from the shape equation
-#' costs \eqn{\Delta R^2 < 0.006}) and theoretically coherent.
+#' Sample size is not a predictor: the predicted parameters describe the
+#' population edge weight distribution, independent of sampling precision.
 #'
 #' These predictors enter two SUR equations whose coefficients are stored in
 #' the internal \code{weibull_weights} dataset. SUR was used to account for the
 #' correlated residuals between the shape and scale equations across networks
-#' (residual correlation = 0.261). Model fit was strong: the shape equation
+#' (residual correlation = 0.330). Model fit was strong: the shape equation
 #' achieved \eqn{R^2 = 0.887} (RMSE = 0.048) and the scale equation achieved
-#' \eqn{R^2 = 0.885} (RMSE = 0.011). Shape residuals were normally distributed
+#' \eqn{R^2 = 0.885} (RMSE = 0.014). Shape residuals were normally distributed
 #' (Shapiro-Wilk W = 0.990, p = 0.173). Scale residuals showed a modest
-#' departure from normality (Shapiro-Wilk W = 0.973, p < 0.001), consistent
+#' departure from normality (Shapiro-Wilk W = 0.985, p = 0.034), consistent
 #' with slight right skew in the scale outcome and test sensitivity at n = 194
 #' rather than a substantive violation. Heteroskedasticity was detected in both
 #' the shape equation (Breusch-Pagan p < 0.001) and the scale equation
@@ -71,10 +57,8 @@
 #' negligible (VIF \eqn{\leq} 1.60); the shape equation contains only two
 #' predictors with no multicollinearity concern.
 #'
-#' \code{nodes} influences predicted shape and scale via \code{rlp}.
-#' \code{sample_size} influences predicted scale via \code{scaling}, and
-#' both parameters via their joint contribution to \code{snr} when it is
-#' estimated from data rather than supplied directly.
+#' \code{nodes} influences predicted shape and scale via \code{rlp}, and
+#' \code{snr} influences both parameters directly.
 #'
 #' Empirically, shape values ranged from approximately 0.72 to 1.63
 #' (M = 1.07, SD = 0.14) and scale values from approximately 0.03 to 0.19
@@ -93,11 +77,11 @@
 #' }
 #'
 #' @examples
-#' # Predict parameters for a 10-node network with n = 500
-#' weibull_parameters(nodes = 10, sample_size = 500)
+#' # Predict parameters for a 10-node network
+#' weibull_parameters(nodes = 10)
 #'
 #' # With bootstrapped residuals for use in simulation
-#' weibull_parameters(nodes = 10, sample_size = 500, bootstrap = TRUE)
+#' weibull_parameters(nodes = 10, bootstrap = TRUE)
 #'
 #' @author Alexander P. Christensen <alexpaulchristensen@gmail.com>
 #'
@@ -110,16 +94,15 @@
 #' @export
 #'
 # Predict Weibull parameters ----
-# Updated 29.04.2026
-weibull_parameters <- function(nodes, sample_size, snr = 1, bootstrap = FALSE)
+# Updated 18.11.2026
+weibull_parameters <- function(nodes, snr = 1, bootstrap = FALSE)
 {
 
   # Get Weibull model
   weibull_weights <- get(data("weibull_weights", package = "psychNetwoRk", envir = environment()))
 
   # Compute descriptive parameters
-  shape_parameters <- c(snr = snr, rlp = 1 / log(nodes))
-  scale_parameters <- c(shape_parameters, scaling = sqrt(1 / (sample_size - nodes)))
+  scale_parameters <- shape_parameters <- c(snr = snr, rlp = 1 / log(nodes))
 
   # Compute Weibull parameters
   shape <- unname(

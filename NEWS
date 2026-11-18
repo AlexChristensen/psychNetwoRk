@@ -1,5 +1,10 @@
 ## Version 0.1.0
 
+o CHANGE: `weibull_parameters()` no longer uses sample size (`scaling`) as a
+  predictor; the `sample_size` argument has been removed and both Weibull
+  equations are now predicted from `snr` and `nodes` only. `sample_size` in
+  `simulate_sbm()` and `simulate_smallworld()` no longer affects edge weights
+
 o CHANGE: `simulate_sbm()` now balances the highest-weight (reserved) within-community
   edges across communities and guarantees a minimum of `nodes - 1`
   within-community edges per community, preventing nearly empty communities
