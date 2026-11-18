@@ -281,6 +281,24 @@ advantage will therefore always be at least as large as implied by
 \code{1 - diffusion}, and typically larger. The \code{Q} field in the
 returned \code{parameters} list (Newman-Girvan modularity) provides a
 post-hoc summary of the actual community contrast achieved.
+
+The highest-weight (reserved) edges are balanced across communities rather
+than being shuffled across the whole network: each community receives a
+share of the reserved edges proportional to its number of within-community
+edges, and the reserved weights are interleaved so that every community
+receives a similar mix of strong and weaker weights. This prevents a
+community from being left with only weak within-community edges by chance.
+
+\strong{Minimum within-community edges}
+
+Within-community edges are sampled from the diagonal of
+\code{density_matrix}. To avoid communities that are nearly empty by
+chance (particularly with few nodes per block), every community is
+guaranteed at least \code{nodes - 1} within-community edges (or all
+possible edges, whichever is smaller). When a sampled community has fewer
+edges, edges are added at random from its absent edges. For very low
+within-community densities, this floor may raise the realized density above
+the requested value.
 }
 \examples{
 # Construct density matrix for 3 blocks with uniform densities

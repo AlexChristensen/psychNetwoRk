@@ -179,6 +179,24 @@
 #' returned \code{parameters} list (Newman-Girvan modularity) provides a
 #' post-hoc summary of the actual community contrast achieved.
 #'
+#' The highest-weight (reserved) edges are balanced across communities rather
+#' than being shuffled across the whole network: each community receives a
+#' share of the reserved edges proportional to its number of within-community
+#' edges, and the reserved weights are interleaved so that every community
+#' receives a similar mix of strong and weaker weights. This prevents a
+#' community from being left with only weak within-community edges by chance.
+#'
+#' \strong{Minimum within-community edges}
+#'
+#' Within-community edges are sampled from the diagonal of
+#' \code{density_matrix}. To avoid communities that are nearly empty by
+#' chance (particularly with few nodes per block), every community is
+#' guaranteed at least \code{nodes - 1} within-community edges (or all
+#' possible edges, whichever is smaller). When a sampled community has fewer
+#' edges, edges are added at random from its absent edges. For very low
+#' within-community densities, this floor may raise the realized density above
+#' the requested value.
+#'
 #' @return A named list of class \code{"ggm_simulate"} with four elements
 #' (see \code{\link{add_population_error}} to add population error):
 #'
@@ -643,11 +661,25 @@ generate_sbm <- function(
     # Get community index
     community_index <- membership == i
 
-    # Get block edges
-    community_block <- block_matrix[community_index, community_index]
+    # Get block edges (possible edges)
+    possible_block <- community_block <- block_matrix[community_index, community_index]
 
     # Compute probabilities
-    community_block[community_block] <- runif_xoshiro(sum(community_block)) < density_matrix[i,i]
+    community_block[possible_block] <- runif_xoshiro(sum(possible_block)) < density_matrix[i,i]
+
+    # Enforce floor on the number of within-block edges
+    # (at least the number needed to connect the block: nodes - 1)
+    edge_floor <- min(sum(community_index) - 1, sum(possible_block))
+    edge_deficit <- edge_floor - sum(community_block)
+
+    # Check for deficit
+    if(edge_deficit > 0){
+
+      # Randomly add edges from the absent edges
+      absent_edges <- which(possible_block & !community_block)
+      community_block[shuffle(absent_edges, size = edge_deficit)] <- TRUE
+
+    }
 
     # Insert block back into block matrix
     block_matrix[community_index, community_index] <- community_block
@@ -738,7 +770,8 @@ sbm_weights <- function(
   n_between <- length(between_index)
 
   # Remaining edge weights
-  remaining_weights <- shuffle(edges[-reserved_index])
+  ## (avoid negative indexing; -integer(0) would drop every edge when none are reserved)
+  remaining_weights <- shuffle(edges[seq_along(edges) > within_reserved])
 
   # Check that there is between weights to assign
   if(n_between > 0){
@@ -752,10 +785,51 @@ sbm_weights <- function(
 
   }
 
+  # Obtain community membership of each within-community edge
+  within_block <- membership[col(membership_matrix)[lower_triangle][within_index]]
+
+  # Initialize within-community weights
+  within_weights <- numeric(total_within)
+  filled <- logical(total_within)
+
+  # Balance reserved (top) edges across communities
+  if(within_reserved > 0){
+
+    # Apportion reserved edges to communities in proportion to their
+    # number of within-community edges (largest remainder method)
+    block_total <- tabulate(within_block, nbins = max(membership))
+    expected <- within_reserved * block_total / total_within
+    quota <- floor(expected)
+    remainder <- within_reserved - sum(quota)
+    if(remainder > 0){
+      fraction <- expected - quota
+      add_index <- order(-fraction, runif_xoshiro(length(quota)))[seq_len(remainder)]
+      quota[add_index] <- quota[add_index] + 1
+    }
+
+    # Interleave communities across the ranked reserved weights using
+    # evenly spaced, randomly offset ranks (stratified round-robin) so
+    # each community receives a similar share of strong weights
+    slot_block <- rep(seq_along(quota), quota)
+    slot_rank <- (sequence(quota) - runif_xoshiro(length(quota))[slot_block]) / quota[slot_block]
+    slot_block <- slot_block[order(slot_rank)]
+
+    # Assign reserved weights to randomly selected edges within each community
+    reserved_weights <- edges[reserved_index]
+    block_edges <- split(seq_len(total_within), factor(within_block, levels = seq_along(quota)))
+    for(i in which(quota > 0)){
+      selected <- shuffle(block_edges[[i]], size = quota[i])
+      within_weights[selected] <- reserved_weights[slot_block == i]
+      filled[selected] <- TRUE
+    }
+
+  }
+
+  # Fill remaining within-community edges with randomly selected weights
+  within_weights[!filled] <- shuffle(remaining_weights[random_sequence])
+
   # Set within-community edges
-  block_matrix[lower_triangle][within_index] <- shuffle(
-    c(edges[reserved_index], remaining_weights[random_sequence])
-  )
+  block_matrix[lower_triangle][within_index] <- within_weights
 
   # Set upper triangle to zero
   block_matrix[!lower_triangle] <- 0
