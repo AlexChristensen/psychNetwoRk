@@ -9,7 +9,8 @@ smallworldness(
   lattice,
   method = c("analytical", "omega", "S", "SWI", "SWP"),
   weighted = FALSE,
-  iter = 100
+  iter = 100,
+  seed = NULL
 )
 }
 \arguments{
@@ -39,6 +40,8 @@ random graph baseline:
 where \eqn{C_{\text{rand}} \approx \langle k \rangle / n} and
 \eqn{L_{\text{rand}} \approx \ln(n) / \ln(\langle k \rangle)}.
 No random graphs are generated. The \code{weighted} argument is ignored.
+The approximation requires an average degree greater than 1 (otherwise
+\code{NA} is returned with a warning).
 Values greater than 1 indicate small-world structure
 
 \item \code{"S"} --- Computes the Humphries & Gurney (2008) \eqn{S}
@@ -46,6 +49,8 @@ metric by simulation. Random graphs are generated under the
 Erdős–Rényi model (\code{\link[igraph]{sample_gnm}}) with the same
 number of nodes and edges as \code{network}. The empirical and random
 clustering coefficients both use global transitivity (\eqn{C^\Delta}).
+\eqn{S} is computed from the average clustering coefficient and path length
+across the random graphs.
 When \code{weighted = TRUE}, edge weights are reassigned to each random
 graph topology via \code{assign_weights}. Values greater than 1
 indicate small-world structure
@@ -73,14 +78,15 @@ coefficient fall within the lattice-to-random range, so that SWI = 1
 only when \eqn{L = L_{\text{rand}}} and \eqn{C = C_{\text{latt}}}
 simultaneously. Because this ideal is mathematically unachievable in a
 finite network, SWI = 1 is a conceptual upper bound rather than a
-realisable value. Random graphs preserve the degree sequence via
+realizable value. Random graphs preserve the degree sequence via
 edge-switching (\code{\link[igraph]{sample_degseq}},
 \code{method = "edge.switching.simple"}). The clustering coefficient uses
 average local transitivity (\eqn{\bar{C}}). When \code{weighted = TRUE},
 edge weights are reassigned to each random graph topology and the lattice
-is constructed with \code{weighted = TRUE}. Note: SWI and SWP were
+is constructed with \code{weighted = TRUE}. Values are bounded to
+\eqn{[0, 1]}. Note: SWI and SWP were
 developed independently and concurrently; both apply the same
-double-normalisation framework but differ in how the two deviation terms
+double-normalization framework but differ in how the two deviation terms
 are combined (product vs. Euclidean distance). Values close to 1 indicate
 strong small-world structure; values near 0 indicate lattice-like or
 random-like structure. Bounded in \eqn{[0, 1]}
@@ -105,15 +111,22 @@ structure; a pragmatic threshold of \eqn{\phi_T = 0.60} has been suggested
 Whether to compute small-worldness on the weighted network. When
 \code{TRUE}, edge weights from \code{network} are preserved for the
 empirical graph and reassigned to random and lattice graph topologies
-via \code{assign_weights}, following Muldoon et al. (2016). When
-\code{FALSE} (default), all graphs are treated as binary. Ignored when
-\code{method = "analytical"}}
+via \code{assign_weights}, following Muldoon et al. (2016): path lengths
+use distances equal to the inverse of the (absolute) weights and clustering
+uses the weighted clustering coefficient of Onnela et al. (2005) with
+weights normalized by the largest weight. When \code{FALSE} (default), all
+graphs are treated as binary. Ignored when \code{method = "analytical"}}
 
 \item{iter}{Numeric (length = 1).
 Number of random graphs to generate when estimating the null baseline.
 Defaults to \code{100}.
 Ignored when \code{method = "analytical"}.
 Higher values produce more stable estimates at the cost of computation time}
+
+\item{seed}{Numeric (length = 1).
+Seed for reproducible results. The same \code{seed} gives the same results
+(and does not change the random number stream of the R session).
+Defaults to \code{NULL} (random seed)}
 }
 \value{
 Numeric (length = 1).
@@ -190,6 +203,11 @@ Making big communities small: Using network science to understand the ecological
 Muldoon, S. F., Bridgeford, E. W., & Bassett, D. S. (2016).
 Small-world propensity and weighted brain networks.
 \emph{Scientific Reports}, \emph{6}(1), 22057.
+
+\strong{Weighted clustering coefficient} \cr
+Onnela, J.-P., Saramaki, J., Kertesz, J., & Kaski, K. (2005).
+Intensity and coherence of motifs in weighted complex networks.
+\emph{Physical Review E}, \emph{71}(6), 065103.
 }
 \author{
 Alexander P. Christensen <alexpaulchristensen@gmail.com>

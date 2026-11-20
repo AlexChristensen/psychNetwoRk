@@ -4,7 +4,7 @@
 \alias{proxswap_lattice}
 \title{Construct a Degree-Preserving Ring Lattice via Proximity-Swap Construction}
 \usage{
-proxswap_lattice(network, weighted = FALSE, shuffles = 100)
+proxswap_lattice(network, weighted = FALSE, shuffles = 100, seed = NULL)
 }
 \arguments{
 \item{network}{Matrix.
@@ -29,6 +29,11 @@ order, runs the proximity construction, and applies swap repair if needed.
 Only passes producing a connected graph with zero degree error are
 retained; the one with the highest clustering coefficient is returned.
 Defaults to \code{100}.}
+
+\item{seed}{Numeric (length = 1).
+Seed for reproducible results. The same \code{seed} gives the same results
+(and does not change the random number stream of the R session).
+Defaults to \code{NULL} (random seed)}
 }
 \value{
 A square symmetric matrix of the same dimension as \code{network},
@@ -37,7 +42,9 @@ lattice. When \code{weighted = FALSE} (default), entries are binary integers
 (\code{0L}/\code{1L}); when \code{weighted = TRUE}, entries contain the
 reassigned edge weights from \code{network} with original signs preserved.
 The average clustering coefficient of the returned graph is attached as the
-attribute \code{"CC"} and can be retrieved with \code{attr(result, "CC")}.
+attribute \code{"CC"} and can be retrieved with \code{attr(result, "CC")}
+(when \code{weighted = TRUE}, the weighted clustering coefficient of
+Onnela et al., 2005, with weights normalized by the largest weight).
 When the empirical fallback is triggered (see Details), \code{"CC"} reflects
 the empirical network's clustering coefficient rather than a lattice's.
 }
@@ -78,7 +85,7 @@ zero. This phase is implemented in compiled C via \code{proximity_pass_c}.
 
 \strong{Swap repair.} If any degree deficit remains after the proximity
 pass, the highest-deficit node \eqn{i} is connected to its nearest
-available ring neighbour, scanning clockwise and counter-clockwise
+available ring neighbor, scanning clockwise and counter-clockwise
 positions in interleaved distance order. When no direct partner with
 remaining budget exists, an edge swap is performed: a nearby unconnected
 node \eqn{j} is found, one of \eqn{j}'s existing edges to \eqn{k} is
@@ -88,7 +95,7 @@ deficits are resolved or the iteration cap (\eqn{2n^2}) is reached. This
 phase is implemented in compiled C via \code{swapping_pass_c}.
 
 \strong{Weight assignment.} When \code{weighted = TRUE}, edge weights are
-reassigned after the binary topology is finalised. The observed weights are
+reassigned after the binary topology is finalized. The observed weights are
 sorted by \emph{absolute value} in descending order (largest magnitude first)
 and mapped onto lattice edges ranked by ascending ring distance (i.e.,
 \eqn{d_{ij} = \min(|i - j|,\, n - |i - j|)}), so that shorter (more local)

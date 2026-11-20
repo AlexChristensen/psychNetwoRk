@@ -39,7 +39,7 @@
 #' units far more often than the reverse (vs. Beta: 56--0; vs. Gamma: 15--2;
 #' vs. log-normal: 155--13; vs. Exponential: 54--0).
 #'
-#' The resulting Weibull shape and scale parameters were then jointly modelled
+#' The resulting Weibull shape and scale parameters were then jointly modeled
 #' as a function of network descriptors using Seemingly Unrelated Regression
 #' (\code{systemfit}), which accounts for correlated residuals between the
 #' shape and scale equations across networks (residual correlation = 0.330).
@@ -49,7 +49,7 @@
 #' that networks in this regime show the weakest statistical evidence for edge
 #' presence or absence, yielding unstable parameter estimates (n = 28 excluded).
 #' This left n = 194 networks for analysis. Shape and scale parameters were
-#' modelled on their original scales.
+#' modeled on their original scales.
 #'
 #' Both equations are predicted from \code{snr} and \code{rlp} only. Sample
 #' size is not included as a predictor: the predicted parameters describe the

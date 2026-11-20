@@ -12,7 +12,8 @@ add_population_error(
   fit_value = NULL,
   tolerance = 0.01,
   max_iterations = 10,
-  control = list()
+  control = list(),
+  seed = NULL
 )
 }
 \arguments{
@@ -87,8 +88,9 @@ Defaults to the conventional cutoff for the \code{metric}:
 
 \item{tolerance}{Numeric (length = 1).
 Maximum absolute difference between the target \code{fit_value} and the
-\code{metric} of the population correlation matrix with error. Ensures that
-the appropriate amount of population error was added.
+\code{metric} of the population correlation matrix with error that is
+accepted without a warning (must be positive). Ensures that the appropriate
+amount of population error was added.
 Defaults to \code{0.01}}
 
 \item{max_iterations}{Numeric (length = 1).
@@ -147,7 +149,23 @@ Defaults to \code{0.30}
 that are omitted edges for \code{method = "hb"}. At least one edge is always
 omitted. Defaults to \code{0.10}
 
+\item \code{max_condition} --- Largest condition number of the population
+correlation matrix with error for \code{method = "hb"}. The estimation of
+the true network (GLASSO) becomes very slow for nearly singular matrices,
+which occur at the largest errors the omitted edges can add. In
+simulations across a wide range of networks, a limit of \code{1000}
+keeps nearly all of the reachable misfit (CFI, TLI, and SRMR reach their
+worst fit well before the limit; RMSEA loses about 2\% on average) and
+avoids fits that take many seconds. If \code{fit_value} requires more error
+than the limit allows, a warning is given and the closest solution is used.
+Use \code{Inf} for no limit. Defaults to \code{1000}
+
 }}
+
+\item{seed}{Numeric (length = 1).
+Seed for reproducible results. The same \code{seed} gives the same results
+(and does not change the random number stream of the R session).
+Defaults to \code{NULL} (random seed)}
 }
 \value{
 Returns a list of the same class(es) and structure as the
@@ -254,9 +272,10 @@ size, the population-level fit is evaluated at the size of the human
 population (approximately 8.3 billion). At this size, the fit indices are
 within about \eqn{10^{-8}} of their large-sample limits
 
-Each optimization attempt uses new random starting values or random draws
-of the error (up to \code{max_iterations}) and the attempt closest to
-\code{fit_value} is returned. If \code{fit_value} cannot be reached within
+Each optimization attempt uses new random draws of the error. Attempts
+continue (up to \code{max_iterations}) until \code{fit_value} is matched
+(to within \eqn{10^{-6}}) and the attempt closest to \code{fit_value} is
+returned. If \code{fit_value} cannot be reached within
 \code{tolerance} (e.g., because the target requires more error than can be
 added while remaining positive definite), a warning is given and the closest
 solution is used

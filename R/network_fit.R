@@ -30,13 +30,16 @@
 #'
 #' @param S Matrix or data frame.
 #' A p by p square zero-order correlation matrix corresponding
-#' with the input \code{network}
+#' with the input \code{network} (must be positive definite)
 #'
 #' @param ci Numeric (length = 1).
-#' Confidence interval for RMSEA.
+#' Confidence interval for RMSEA (between 0 and 1), or \code{NULL} to skip
+#' the confidence interval.
 #' Defaults to \code{0.95}
 #'
-#' @return A named numeric vector of traditional and likelihood-based fit
+#' @return A named numeric vector (class \code{"ggm_fit"}, with \code{print}
+#' and \code{summary} methods; indexing such as \code{fit["CFI"]} returns plain
+#' numbers) of traditional and likelihood-based fit
 #' indices. The vector always contains the following elements:
 #'
 #' \describe{
@@ -59,8 +62,9 @@
 #'
 #' \item{\code{RMSEA.XX.lower}, \code{RMSEA.XX.upper}}{Lower and upper
 #' bounds of the \code{ci}-level confidence interval for RMSEA, where
-#' \code{XX} is the integer percentage (e.g., \code{RMSEA.95.lower} and
-#' \code{RMSEA.95.upper} for a 95\% CI)}
+#' \code{XX} is the percentage (e.g., \code{RMSEA.95.lower} and
+#' \code{RMSEA.95.upper} for a 95\% CI and \code{RMSEA.97.5.lower} for a
+#' 97.5\% CI)}
 #'
 #' \item{\code{RMSEA.p.value}}{p-value for the one-sided test of close fit
 #' (H0: RMSEA \eqn{\leq} 0.05)}
@@ -115,9 +119,13 @@
 #' @export
 #'
 # Compute network fit statistics ----
-# Updated 19.11.2026
+# Updated 20.11.2026
 network_fit <- function(network, n, S, ci = 0.95)
 {
+
+  # Check inputs
+  inputs <- network_fit_errors(network, n, S, ci)
+  network <- inputs$network; S <- inputs$S
 
   # Obtain lower triangle indices
   lower_triangle <- lower.tri(network)
@@ -130,59 +138,53 @@ network_fit <- function(network, n, S, ci = 0.95)
   p <- dim(network)[2]
   zero_parameters <- p * (p - 1) / 2
   model_parameters <- sum(network[lower_triangle] != 0)
-
-  # Compute baseline
-  baseline <- diag(1, nrow = p, ncol = p)
-  baseline_ML <- log(det(baseline)) + sum(diag(S %*% solve(baseline))) - log(det(S)) - p
-  baseline_chi_square <- n * baseline_ML
-  baseline_tli <- baseline_chi_square / zero_parameters
-
-  # Compute traditional SEM measures
-  loglik_ML <- log(det(R)) + sum(diag(S %*% solve(R))) - log(det(S)) - p
-  chi_square <- n * loglik_ML
   df <- zero_parameters - model_parameters
-  chi_max <- max(chi_square - df, 0)
+
+  # Decompositions
+  R_chol <- chol(R)
+  R_inverse <- chol2inv(R_chol)
+  log_det_R <- 2 * sum(log(diag(R_chol)))
+  log_det_S <- 2 * sum(log(diag(chol(S))))
+  trace_S_R <- sum(S * R_inverse)
+
+  # Baseline (independence model with unit variances)
+  baseline_chi_square <- n * (sum(diag(S)) - log_det_S - p)
+
+  # Model discrepancy and chi-square
+  chi_square <- n * (log_det_R + trace_S_R - log_det_S - p)
   nDF <- n * df
   rmsea_null <- nDF * 0.0025 # 0.05^2
 
   # log-likelihood
-  loglik <- -(n / 2) * (p * log(2 * pi) + log(det(R)) + sum(diag(S %*% solve(R))))
-  # Assumes no mean structure (or that all means are equal to zero)
+  # (assumes no mean structure or that all means are equal to zero)
+  loglik <- -(n / 2) * (p * log(2 * pi) + log_det_R + trace_S_R)
 
   # Obtain RMSEA confidence intervals
   if(!is.null(ci)) rmsea_cis <- rmsea_ci(chi_square, df, n, nDF, ci) else rmsea_cis <- NULL
 
-  # Compute indices that are undefined when degrees of freedom are zero
-  # (follows {lavaan}: RMSEA = 0, CFI = 1, TLI = 1, p-values are NA)
+  # Fit indices
+  indices <- sem_indices(chi_square, df, baseline_chi_square, zero_parameters, n)
+
+  # p-values (undefined when degrees of freedom are zero)
   if(df > 0){
-
-    chisq_p <- 1 - pchisq(chi_square, df = df)
-    rmsea <- sqrt(chi_max / nDF)
-    rmsea_p <- 1 - pchisq(chi_square, df = df, ncp = rmsea_null)
-    tli <- (baseline_tli - (chi_square / df)) / (baseline_tli - 1)
-
+    chisq_p <- pchisq(chi_square, df = df, lower.tail = FALSE)
+    rmsea_p <- suppressWarnings(
+      pchisq(chi_square, df = df, ncp = rmsea_null, lower.tail = FALSE)
+    )
   }else{
-
     chisq_p <- NA
-    rmsea <- 0
     rmsea_p <- NA
-    tli <- 1
-
   }
-
-  # CFI (denominator follows {lavaan})
-  cfi_denominator <- max(chi_square - df, baseline_chi_square - zero_parameters, 0)
-  cfi <- swiftelse(cfi_denominator == 0, 1, 1 - (chi_max / cfi_denominator))
 
   # Get fit indices
   fit_indices <- c(
     # Traditional fit measures
     chisq = chi_square, df = df, chisq.p.value = chisq_p,
-    RMSEA = rmsea,
+    RMSEA = indices[["RMSEA"]],
     rmsea_cis,
     RMSEA.p.value = rmsea_p,
-    CFI = cfi,
-    TLI = tli,
+    CFI = indices[["CFI"]],
+    TLI = indices[["TLI"]],
     SRMR = sqrt(mean((R[srmr_triangle] - S[srmr_triangle])^2)),
     # Gaussian log-likelihood measures
     logLik = loglik,
@@ -190,12 +192,91 @@ network_fit <- function(network, n, S, ci = 0.95)
     BIC = -2 * loglik + model_parameters * log(n)
   )
 
-  # Rename confidence intervals
+  # Rename confidence intervals (e.g., 95 or 97.5)
   names(fit_indices)[names(fit_indices) %in% c("lower", "upper")] <-
-    paste("RMSEA", format_integer(ci * 100, 1), c("lower", "upper"), sep = ".")
+    paste("RMSEA", format(ci * 100, trim = TRUE), c("lower", "upper"), sep = ".")
 
-  # Return log-likelihood
+  # Add class
+  class(fit_indices) <- "ggm_fit"
+
+  # Return fit indices
   return(fit_indices)
+
+}
+
+#' @noRd
+# Errors ----
+# Updated 20.11.2026
+network_fit_errors <- function(network, n, S, ci)
+{
+
+  # Check network
+  object_error(network, c("matrix", "data.frame", "tibble"), "network_fit")
+  network <- as.matrix(network)
+  typeof_error(network, "numeric", "network_fit")
+  if(!is_symmetric(network)){
+    stop("`network` must be a square, symmetric matrix", call. = FALSE)
+  }
+
+  # Check correlation matrix
+  object_error(S, c("matrix", "data.frame", "tibble"), "network_fit")
+  S <- as.matrix(S)
+  typeof_error(S, "numeric", "network_fit")
+  if(!is_symmetric(S) || !all(dim(S) == dim(network))){
+    stop("`S` must be a square, symmetric matrix with the same dimensions as `network`", call. = FALSE)
+  }
+  if(is(try(chol(S), silent = TRUE), "try-error")){
+    stop("`S` must be positive definite", call. = FALSE)
+  }
+
+  # Check sample size
+  typeof_error(n, "numeric", "network_fit")
+  length_error(n, 1, "network_fit")
+  range_error(n, c(1, Inf), "network_fit")
+
+  # Check confidence interval
+  if(!is.null(ci)){
+    typeof_error(ci, "numeric", "network_fit")
+    length_error(ci, 1, "network_fit")
+    if(ci <= 0 || ci >= 1){
+      stop("`ci` must be between 0 and 1 (or NULL)", call. = FALSE)
+    }
+  }
+
+  # Return inputs
+  return(list(network = network, S = S))
+
+}
+
+#' @noRd
+# CFI, TLI, and RMSEA from chi-squares ----
+# Follows {lavaan}: RMSEA = 0 and TLI = 1 when the degrees of freedom are
+# zero; CFI = 1 when its denominator is zero (CFI denominator follows {lavaan})
+# Updated 20.11.2026
+sem_indices <- function(chi_square, df, baseline_chi_square, baseline_df, n)
+{
+
+  # Chi-square above degrees of freedom
+  model_excess <- max(chi_square - df, 0)
+  denominator <- max(chi_square - df, baseline_chi_square - baseline_df, 0)
+
+  # Indices
+  if(df > 0){
+    baseline_ratio <- baseline_chi_square / baseline_df
+    RMSEA <- sqrt(model_excess / (n * df))
+    TLI <- (baseline_ratio - (chi_square / df)) / (baseline_ratio - 1)
+  }else{
+    RMSEA <- 0
+    TLI <- 1
+  }
+
+  # Return indices
+  return(
+    c(
+      CFI = swiftelse(denominator == 0, 1, 1 - model_excess / denominator),
+      TLI = TLI, RMSEA = RMSEA
+    )
+  )
 
 }
 
@@ -213,7 +294,7 @@ rmsea_ci <- function(chi_square, df, n, nDF, ci)
   # Internal function for finding RMSEA confidence intervals
   # (same as {lavann} version 0.6.19)
   find_lambda <- function(lambda, ci){
-    pchisq(chi_square, df = df, ncp = lambda) - ci
+    suppressWarnings(pchisq(chi_square, df = df, ncp = lambda)) - ci
   }
 
   # Find lower bound

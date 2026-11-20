@@ -1,7 +1,7 @@
 Package: psychNetwoRk
 Title: Data Simulation Based on Psychometric Networks
 Version: 0.1.0
-Date: 2026-11-03
+Date: 2026-11-20
 Authors@R: c(
     person("Alexander", "Christensen", email = "alexpaulchristensen@gmail.com", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-9798-7037")),
     person("David", "Blackman", role = "ctb", comment = "Original xoshiro.c implementation"),
@@ -28,7 +28,7 @@ License: AGPL (>= 3)
 Encoding: UTF-8
 LazyData: true
 NeedsCompilation: yes
-Imports: igraph, glasso, methods, psych, stats, utils
+Imports: igraph, glasso, methods, stats, utils
 Copyright: See inst/COPYRIGHTS for details
 BugReports: https://github.com/AlexChristensen/psychNetwoRk/issues
 Config/roxygen2/version: 8.1.1

@@ -32,6 +32,8 @@
 #' where \eqn{C_{\text{rand}} \approx \langle k \rangle / n} and
 #' \eqn{L_{\text{rand}} \approx \ln(n) / \ln(\langle k \rangle)}.
 #' No random graphs are generated. The \code{weighted} argument is ignored.
+#' The approximation requires an average degree greater than 1 (otherwise
+#' \code{NA} is returned with a warning).
 #' Values greater than 1 indicate small-world structure
 #'
 #' \item \code{"S"} --- Computes the Humphries & Gurney (2008) \eqn{S}
@@ -39,6 +41,8 @@
 #' Erdős–Rényi model (\code{\link[igraph]{sample_gnm}}) with the same
 #' number of nodes and edges as \code{network}. The empirical and random
 #' clustering coefficients both use global transitivity (\eqn{C^\Delta}).
+#' \eqn{S} is computed from the average clustering coefficient and path length
+#' across the random graphs.
 #' When \code{weighted = TRUE}, edge weights are reassigned to each random
 #' graph topology via \code{assign_weights}. Values greater than 1
 #' indicate small-world structure
@@ -66,14 +70,15 @@
 #' only when \eqn{L = L_{\text{rand}}} and \eqn{C = C_{\text{latt}}}
 #' simultaneously. Because this ideal is mathematically unachievable in a
 #' finite network, SWI = 1 is a conceptual upper bound rather than a
-#' realisable value. Random graphs preserve the degree sequence via
+#' realizable value. Random graphs preserve the degree sequence via
 #' edge-switching (\code{\link[igraph]{sample_degseq}},
 #' \code{method = "edge.switching.simple"}). The clustering coefficient uses
 #' average local transitivity (\eqn{\bar{C}}). When \code{weighted = TRUE},
 #' edge weights are reassigned to each random graph topology and the lattice
-#' is constructed with \code{weighted = TRUE}. Note: SWI and SWP were
+#' is constructed with \code{weighted = TRUE}. Values are bounded to
+#' \eqn{[0, 1]}. Note: SWI and SWP were
 #' developed independently and concurrently; both apply the same
-#' double-normalisation framework but differ in how the two deviation terms
+#' double-normalization framework but differ in how the two deviation terms
 #' are combined (product vs. Euclidean distance). Values close to 1 indicate
 #' strong small-world structure; values near 0 indicate lattice-like or
 #' random-like structure. Bounded in \eqn{[0, 1]}
@@ -98,9 +103,16 @@
 #' Whether to compute small-worldness on the weighted network. When
 #' \code{TRUE}, edge weights from \code{network} are preserved for the
 #' empirical graph and reassigned to random and lattice graph topologies
-#' via \code{assign_weights}, following Muldoon et al. (2016). When
-#' \code{FALSE} (default), all graphs are treated as binary. Ignored when
-#' \code{method = "analytical"}
+#' via \code{assign_weights}, following Muldoon et al. (2016): path lengths
+#' use distances equal to the inverse of the (absolute) weights and clustering
+#' uses the weighted clustering coefficient of Onnela et al. (2005) with
+#' weights normalized by the largest weight. When \code{FALSE} (default), all
+#' graphs are treated as binary. Ignored when \code{method = "analytical"}
+#'
+#' @param seed Numeric (length = 1).
+#' Seed for reproducible results. The same \code{seed} gives the same results
+#' (and does not change the random number stream of the R session).
+#' Defaults to \code{NULL} (random seed)
 #'
 #' @param iter Numeric (length = 1).
 #' Number of random graphs to generate when estimating the null baseline.
@@ -150,6 +162,11 @@
 #' Small-world propensity and weighted brain networks.
 #' \emph{Scientific Reports}, \emph{6}(1), 22057.
 #'
+#' \strong{Weighted clustering coefficient} \cr
+#' Onnela, J.-P., Saramaki, J., Kertesz, J., & Kaski, K. (2005).
+#' Intensity and coherence of motifs in weighted complex networks.
+#' \emph{Physical Review E}, \emph{71}(6), 065103.
+#'
 #' @examples
 #' # Simulate a small-world network (population partial correlations)
 #' network <- simulate_smallworld(
@@ -180,41 +197,45 @@
 #' @export
 #'
 # Compute smallworldness ----
-# Updated 25.03.2026
+# Updated 20.11.2026
 smallworldness <- function(
     network, lattice, method = c("analytical", "omega", "S", "SWI", "SWP"),
-    weighted = FALSE, iter = 100
+    weighted = FALSE, iter = 100, seed = NULL
 )
 {
 
-  # Ensure network is in absolute values
-  network <- abs(network)
+  # Set seed (reproducible results)
+  seed_token <- seed_start(seed)
+  on.exit(seed_end(seed_token), add = TRUE)
 
   # Check for missing arguments (argument, default, function)
   # Uses actual function they will be used in
   method <- set_default(method, "swp", smallworldness)
+
+  # Check inputs
+  network <- smallworldness_errors(network, weighted, iter)
+
+  # Ensure network is in absolute values with a zero diagonal
+  network <- abs(network)
+  diag(network) <- 0
 
   # Obtain adjacency matrix
   A <- network != 0
 
   # Check for weights
   if(!weighted){
-    network <- A
+    network <- A + 0
   }
 
-  # Obtain edges
-  degree <- colSums(A, na.rm = TRUE)
-
-  # Get nodes and degree
+  # Obtain degree and nodes
+  degree <- colSums(A)
   nodes  <- length(degree)
 
   # Set up distance matrix
-  node_sequence <- seq_len(nodes)
-  distance_matrix <- abs(outer(node_sequence, node_sequence, "-"))
-  distance_matrix <- pmin(distance_matrix, nodes - distance_matrix)
+  distance_matrix <- ring_distance(nodes)
 
   # Convert network to {igraph}
-  I <- convert2igraph(abs(network))
+  I <- convert2igraph(network)
 
   # Set up function switch
   smallworld_FUN <- switch(
@@ -227,9 +248,11 @@ smallworldness <- function(
   )
 
   # Obtain empirical values
-  ASPL <- igraph::mean_distance(I)
-  CC <- igraph::transitivity(I, type = swiftelse(method %in% c("s", "analytical"), "global", "average"))
-  # Switch CC based on method
+  ASPL <- graph_path_length(I, weighted && method != "analytical")
+  CC <- graph_clustering(
+    network, swiftelse(method %in% c("s", "analytical"), "global", "average"),
+    weighted && method != "analytical"
+  )
 
   # Compute smallworldness
   return(
@@ -243,14 +266,170 @@ smallworldness <- function(
 }
 
 #' @noRd
+# Errors ----
+# Updated 20.11.2026
+smallworldness_errors <- function(network, weighted, iter)
+{
+
+  # Check network
+  object_error(network, c("matrix", "data.frame", "tibble"), "smallworldness")
+  network <- as.matrix(network)
+  typeof_error(network, "numeric", "smallworldness")
+  if(!is_symmetric(network)){
+    stop("`network` must be a square, symmetric matrix", call. = FALSE)
+  }
+
+  # Check weighted
+  typeof_error(weighted, "logical", "smallworldness")
+  length_error(weighted, 1, "smallworldness")
+
+  # Check iterations
+  typeof_error(iter, "numeric", "smallworldness")
+  length_error(iter, 1, "smallworldness")
+  range_error(iter, c(1, Inf), "smallworldness")
+
+  # Return network
+  return(network)
+
+}
+
+#' @noRd
+# Average shortest path length ----
+# Weighted path lengths use distances equal to the inverse of the weights
+# (stronger connections are shorter; Muldoon et al., 2016)
+# Updated 20.11.2026
+graph_path_length <- function(I, weighted)
+{
+  if(weighted){
+    return(igraph::mean_distance(I, weights = 1 / igraph::E(I)$weight))
+  }else{
+    return(igraph::mean_distance(I, weights = NA))
+  }
+}
+
+#' @noRd
+# Clustering coefficient ----
+# Binary: global transitivity or average local transitivity (nodes with
+# degree less than 2 are excluded, as in {igraph}). Weighted: the weighted
+# clustering coefficient of Onnela et al. (2005) with weights normalized by
+# the largest weight (C_i = (W^(1/3))^3_ii / (k_i (k_i - 1))), which equals
+# the binary coefficient for binary networks
+# Updated 20.11.2026
+graph_clustering <- function(network, type = c("global", "average"), weighted)
+{
+
+  # Binary (as {igraph})
+  if(!weighted){
+    return(igraph::transitivity(convert2igraph(network), type = type))
+  }
+
+  # Normalized weights (cube root)
+  network <- as.matrix(network)
+  diag(network) <- 0
+  W <- (abs(network) / max(abs(network)))^(1 / 3)
+
+  # Degree and closed walks of length three
+  degree <- colSums(network != 0)
+  triangles <- diag(W %*% W %*% W)
+  possible <- degree * (degree - 1)
+
+  # Return clustering
+  if(type == "global"){
+    return(sum(triangles) / sum(possible))
+  }else{
+    return(mean(triangles[degree > 1] / possible[degree > 1]))
+  }
+
+}
+
+#' @noRd
+# Random reference graphs ----
+# Degree-preserving (edge switching) or Erdos-Renyi graphs with the same
+# number of edges; when weighted, the network's weights are reassigned
+# to each random topology (`assign_weights`)
+# Updated 20.11.2026
+random_reference_graphs <- function(
+    network, degree, iter, weighted, distance_matrix, type = c("degree", "gnm")
+)
+{
+
+  # Generate random graphs
+  graphs <- lapply(seq_len(iter), function(i){
+    if(type == "degree"){
+      igraph::sample_degseq(out.deg = degree, method = "edge.switching.simple")
+    }else{
+      igraph::sample_gnm(n = length(degree), m = sum(degree) / 2)
+    }
+  })
+
+  # Return adjacency or weighted matrices
+  return(
+    lapply(graphs, function(x){
+      A <- igraph2matrix(x)
+      swiftelse(weighted, list(assign_weights(network, A, distance_matrix)), list(A))[[1]]
+    })
+  )
+
+}
+
+#' @noRd
+# Path length and clustering of random reference graphs ----
+# Updated 20.11.2026
+random_reference_values <- function(graphs, weighted, type = "average")
+{
+  return(
+    list(
+      ASPL = mean(nvapply(graphs, function(x){
+        graph_path_length(convert2igraph(x), weighted)
+      }), na.rm = TRUE),
+      CC = mean(nvapply(graphs, graph_clustering, type = type, weighted = weighted), na.rm = TRUE)
+    )
+  )
+}
+
+#' @noRd
+# Lattice reference ----
+# Supplied lattice (weighted with `assign_weights` when weighted) or
+# a degree-preserving lattice from `proxswap_lattice`
+# Updated 20.11.2026
+lattice_reference <- function(network, lattice, weighted, distance_matrix)
+{
+
+  # Obtain lattice
+  if(missing(lattice)){
+    lattice <- proxswap_lattice(network, weighted = weighted)
+  }else if(weighted){
+    lattice <- assign_weights(network, lattice, distance_matrix)
+  }
+
+  # Return path length and clustering
+  return(
+    list(
+      ASPL = graph_path_length(convert2igraph(lattice), weighted),
+      CC = graph_clustering(lattice, "average", weighted)
+    )
+  )
+
+}
+
+#' @noRd
 # Analytical ----
-# Updated 22.03.2026
+# Updated 20.11.2026
 smallworldness_analytical <- function(network, ASPL, CC, degree, ...)
 {
 
   # Obtain nodes and average degree
   nodes <- dim(network)[2]
   mean_degree <- mean(degree, na.rm = TRUE)
+
+  # Approximation requires an average degree greater than one
+  if(mean_degree <= 1){
+    warning(
+      "The analytical approximation requires an average degree greater than 1; `NA` was returned",
+      call. = FALSE
+    )
+    return(NA_real_)
+  }
 
   # Return analytical
   return(
@@ -261,153 +440,66 @@ smallworldness_analytical <- function(network, ASPL, CC, degree, ...)
 
 #' @noRd
 # Telesford et al. (2011) ----
-# Updated 25.03.2026
+# Updated 20.11.2026
 smallworldness_omega <- function(
     network, I, ASPL, CC, degree, lattice, weighted, distance_matrix, iter, ...
 )
 {
 
-  # Collect random graphs
-  random_graphs <- lapply(
-    seq_len(iter), function(i){
-      igraph::sample_degseq(out.deg = degree, method = "edge.switching.simple")
-    }
+  # Random reference
+  random <- random_reference_values(
+    random_reference_graphs(network, degree, iter, weighted, distance_matrix, "degree"),
+    weighted
   )
 
-  # Check for weighted
-  if(weighted){
-
-    # Obtain weighted graphs
-    random_graphs <- lapply(random_graphs, function(x){
-
-      # Get weighted graphs
-      weighted_graph <- assign_weights(network, igraph2matrix(x), distance_matrix)
-
-      # Return back as {igraph}
-      return(convert2igraph(weighted_graph))
-
-    })
-
-  }
-
-  # Compute ASPL
-  random_ASPL <- mean(nvapply(random_graphs, igraph::mean_distance), na.rm = TRUE)
-
-  # Check if lattice is missing
-  if(missing(lattice)){
-    lattice_CC <- attributes(proxswap_lattice(network, weighted = weighted))$CC
-  }else{
-
-    # Check for weighted
-    if(weighted){
-      lattice <- assign_weights(network, lattice, distance_matrix)
-    }
-
-    lattice_CC <- igraph::transitivity(convert2igraph(lattice), type = "average")
-  }
+  # Lattice reference
+  regular <- lattice_reference(network, lattice, weighted, distance_matrix)
 
   # Return omega
-  return((random_ASPL / ASPL) - (CC / lattice_CC))
+  return((random$ASPL / ASPL) - (CC / regular$CC))
 
 }
 
 #' @noRd
 # Humphries & Gurney (2008) ----
-# Updated 25.03.2026
-smallworldness_S <- function(network, I, ASPL, CC, weighted, distance_matrix, iter, ...)
+# Updated 20.11.2026
+smallworldness_S <- function(network, I, ASPL, CC, degree, weighted, distance_matrix, iter, ...)
 {
 
-  # Obtain nodes and edges
-  nodes <- dim(network)[2]
-  edges <- sum(network[lower.tri(network)] != 0)
-
-  # Obtain random graphs
-  random_graphs <- lapply(seq_len(iter), function(i){
-    igraph::sample_gnm(n = nodes, m = edges)
-  })
-
-  # Check for weighted
-  if(weighted){
-
-    # Obtain weighted graphs
-    random_graphs <- lapply(random_graphs, function(x){
-
-      # Get weighted graphs
-      weighted_graph <- assign_weights(network, igraph2matrix(x), distance_matrix)
-
-      # Return back as {igraph}
-      return(convert2igraph(weighted_graph))
-
-    })
-
-  }
-
-  # Compute S
-  S <- nvapply(
-    random_graphs, function(x){
-      (CC / igraph::transitivity(x, type = "global")) / (ASPL / igraph::mean_distance(x))
-    }
+  # Random reference (Erdos-Renyi with the same number of edges)
+  random <- random_reference_values(
+    random_reference_graphs(network, degree, iter, weighted, distance_matrix, "gnm"),
+    weighted, type = "global"
   )
 
   # Return S
-  return(mean(S, na.rm = TRUE))
+  return((CC / random$CC) / (ASPL / random$ASPL))
 
 }
 
 #' @noRd
 # Neal (2015) ----
-# Updated 25.03.2026
+# Updated 20.11.2026
 smallworldness_SWI <- function(
     network, I, ASPL, CC, degree, lattice, weighted, distance_matrix, iter, ...
 )
 {
 
-  # Collect random graphs
-  random_graphs <- lapply(
-    seq_len(iter), function(i){
-      igraph::sample_degseq(out.deg = degree, method = "edge.switching.simple")
-    }
+  # Random reference
+  random <- random_reference_values(
+    random_reference_graphs(network, degree, iter, weighted, distance_matrix, "degree"),
+    weighted
   )
 
-  # Check for weighted
-  if(weighted){
+  # Lattice reference
+  regular <- lattice_reference(network, lattice, weighted, distance_matrix)
 
-    # Obtain weighted graphs
-    random_graphs <- lapply(random_graphs, function(x){
+  # Compute SWI
+  SWI <- ((ASPL - regular$ASPL) / (random$ASPL - regular$ASPL)) *
+    ((CC - random$CC) / (regular$CC - random$CC))
 
-      # Get weighted graphs
-      weighted_graph <- assign_weights(network, igraph2matrix(x), distance_matrix)
-
-      # Return back as {igraph}
-      return(convert2igraph(weighted_graph))
-
-    })
-
-  }
-
-  # Compute ASPL and CC
-  random_ASPL <- mean(nvapply(random_graphs, igraph::mean_distance), na.rm = TRUE)
-  random_CC <- mean(nvapply(random_graphs, igraph::transitivity, type = "average"), na.rm = TRUE)
-
-  # Check if lattice is missing
-  if(missing(lattice)){
-    lattice <- proxswap_lattice(network, weighted = weighted)
-  }else if(weighted){
-    lattice <- assign_weights(network, lattice, distance_matrix)
-  }
-
-  # Ensure lattice is {igraph}
-  lattice <- convert2igraph(lattice)
-
-  # Compute ASPL and CC
-  lattice_ASPL <- igraph::mean_distance(lattice)
-  lattice_CC <- igraph::transitivity(lattice, type = "average")
-
-  # Return SWI
-  return(
-    ((ASPL - lattice_ASPL) / (random_ASPL - lattice_ASPL)) *
-    ((CC - random_CC) / (lattice_CC - random_CC))
-  )
+  # Return SWI (bounded to [0, 1])
+  return(swiftelse(is.finite(SWI), min(1, max(0, SWI)), NA_real_))
 
 }
 
@@ -421,60 +513,32 @@ boundary_values <- function(empirical, random, regular)
 
 #' @noRd
 # Muldoon et al. (2016) ----
-# Updated 25.03.2026
+# Updated 20.11.2026
 smallworldness_SWP <- function(
     network, I, ASPL, CC, degree, lattice, weighted, distance_matrix, iter, ...
 )
 {
 
-  # Collect random graphs
-  random_graphs <- lapply(
-    seq_len(iter), function(i){
-      igraph::sample_degseq(out.deg = degree, method = "edge.switching.simple")
-    }
+  # Random reference
+  random <- random_reference_values(
+    random_reference_graphs(network, degree, iter, weighted, distance_matrix, "degree"),
+    weighted
   )
 
-  # Check for weighted
-  if(weighted){
+  # Lattice reference
+  regular <- lattice_reference(network, lattice, weighted, distance_matrix)
 
-    # Obtain weighted graphs
-    random_graphs <- lapply(random_graphs, function(x){
-
-      # Get weighted graphs
-      weighted_graph <- assign_weights(network, igraph2matrix(x), distance_matrix)
-
-      # Return back as {igraph}
-      return(convert2igraph(weighted_graph))
-
-    })
-
-  }
-
-  # Compute ASPL and CC
-  random_ASPL <- mean(nvapply(random_graphs, igraph::mean_distance), na.rm = TRUE)
-  random_CC <- mean(nvapply(random_graphs, igraph::transitivity, type = "average"), na.rm = TRUE)
-
-  # Check if lattice is missing
-  if(missing(lattice)){
-    lattice <- proxswap_lattice(network, weighted = weighted)
-  }else if(weighted){
-    lattice <- assign_weights(network, lattice, distance_matrix)
-  }
-
-  # Ensure lattice is {igraph}
-  lattice <- convert2igraph(lattice)
-
-  # Compute ASPL and CC
-  lattice_ASPL <- igraph::mean_distance(lattice)
-  lattice_CC <- igraph::transitivity(lattice, type = "average")
-
-  # Compute deltas
-  delta_ASPL <- max(0, (ASPL - random_ASPL)) / (lattice_ASPL - random_ASPL)
-  delta_CC <- max(0, (lattice_CC - CC)) / (lattice_CC - random_CC)
-
-  # Boundary check
-  delta_ASPL <- min(1, swiftelse(boundary_values(ASPL, random_ASPL, lattice_ASPL), 1, delta_ASPL))
-  delta_CC <- min(1, swiftelse(boundary_values(CC, random_CC, lattice_CC), 1, delta_CC))
+  # Compute deltas (bounded to [0, 1]; degenerate references give 1)
+  delta_ASPL <- (ASPL - random$ASPL) / (regular$ASPL - random$ASPL)
+  delta_CC <- (regular$CC - CC) / (regular$CC - random$CC)
+  delta_ASPL <- swiftelse(
+    boundary_values(ASPL, random$ASPL, regular$ASPL) || !is.finite(delta_ASPL),
+    1, min(1, max(0, delta_ASPL))
+  )
+  delta_CC <- swiftelse(
+    boundary_values(CC, random$CC, regular$CC) || !is.finite(delta_CC),
+    1, min(1, max(0, delta_CC))
+  )
 
   # Return SWP
   return(1 - sqrt((delta_ASPL^2 + delta_CC^2) / 2))

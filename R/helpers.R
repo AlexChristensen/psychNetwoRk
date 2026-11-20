@@ -28,9 +28,117 @@ ulapply <- function(X, FUN, ..., recursive = TRUE)
 }
 
 #' @noRd
+# Reproducible random number generation ----
+# Exported functions with a `seed` argument open a seed scope: while it is
+# active, every call to the C random number generators (without its own
+# seed) uses a deterministic seed derived from the scope's seed and a call
+# counter. All random numbers in the package come from the C generators; R's
+# random number generator is also set with `set.seed(seed)` so that functions
+# from other packages used within (e.g., {igraph}'s random graphs and Leiden
+# algorithm) are reproducible as well. Nested calls (e.g., `simulate_sbm`
+# calling `smallworldness`) share the outer scope. When the scope ends, R's
+# random number generator state is restored, so a seeded call does not change
+# the user's random stream
+# Updated 20.11.2026
+ggm_rng <- new.env(parent = emptyenv())
+
+#' @noRd
+# Start a seed scope (returns a token for `seed_end`; NULL when no scope
+# was started)
+# Updated 20.11.2026
+seed_start <- function(seed)
+{
+
+  # No seed or a scope is already active
+  if(is.null(seed) || isTRUE(ggm_rng$active)){
+    return(NULL)
+  }
+
+  # Check seed
+  if(
+    !is.numeric(seed) || length(seed) != 1 || !is.finite(seed) ||
+    seed != round(seed) || abs(seed) > .Machine$integer.max
+  ){
+    stop("`seed` must be a single whole number (or NULL for a random seed)", call. = FALSE)
+  }
+
+  # Store user's random number generator state
+  global <- globalenv()
+  token <- list(
+    exists = exists(".Random.seed", envir = global, inherits = FALSE)
+  )
+  if(token$exists){
+    token$state <- get(".Random.seed", envir = global, inherits = FALSE)
+  }
+
+  # Start scope
+  ggm_rng$active <- TRUE
+  ggm_rng$base <- abs(seed) + 1
+  ggm_rng$counter <- 0
+
+  # Set R's random number generator (for functions from other packages)
+  set.seed(seed)
+
+  # Return token
+  return(token)
+
+}
+
+#' @noRd
+# End a seed scope (restores the user's random number generator state)
+# Updated 20.11.2026
+seed_end <- function(token)
+{
+
+  # Check for scope
+  if(is.null(token)){
+    return(invisible(NULL))
+  }
+
+  # End scope
+  ggm_rng$active <- FALSE
+
+  # Restore user's random number generator state
+  global <- globalenv()
+  if(isTRUE(token$exists)){
+    assign(".Random.seed", token$state, envir = global)
+  }else if(exists(".Random.seed", envir = global, inherits = FALSE)){
+    rm(".Random.seed", envir = global)
+  }
+
+  # Return invisibly
+  return(invisible(NULL))
+
+}
+
+#' @noRd
+# Seed for a call to the C random number generators
+# (0 = random seed from the clock, process ID, and a counter)
+# Updated 20.11.2026
+call_seed <- function(seed)
+{
+
+  # Supplied seed
+  if(!is.null(seed)){
+    return(as.numeric(seed))
+  }
+
+  # No active scope
+  if(!isTRUE(ggm_rng$active)){
+    return(0)
+  }
+
+  # Deterministic seed from the scope's seed and the call counter
+  # (non-zero and exactly representable as a double)
+  ggm_rng$counter <- ggm_rng$counter + 1
+  return(ggm_rng$base * 2097152 + ggm_rng$counter)
+
+}
+
+#' @noRd
 # Generate uniform data ----
-# Allows adjustment of range
-# Updated 26.10.2023
+# Allows adjustment of range (values are in the open interval (min, max))
+# Updated 20.11.2026
 runif_xoshiro <- function(n, min = 0, max = 1, seed = NULL)
 {
 
@@ -38,7 +146,7 @@ runif_xoshiro <- function(n, min = 0, max = 1, seed = NULL)
   values <- .Call(
     "r_xoshiro_uniform",
     as.integer(n),
-    swiftelse(is.null(seed), 0, seed),
+    call_seed(seed),
     PACKAGE = "psychNetwoRk"
   )
 
@@ -46,7 +154,6 @@ runif_xoshiro <- function(n, min = 0, max = 1, seed = NULL)
   if(min != 0 || max != 1){ # transform
     values <- min + (max - min) * values
   }
-
 
   # Return call from C
   return(values)
@@ -56,16 +163,21 @@ runif_xoshiro <- function(n, min = 0, max = 1, seed = NULL)
 #' @noRd
 # Shuffle (without replacement) ----
 # Uses xoshiro256++ random number generation: https://prng.di.unimi.it/
-# Updated 30.07.2023
+# Updated 20.11.2026
 shuffle <- function(x, size = length(x), seed = NULL)
 {
+
+  # Check size
+  if(size > length(x)){
+    stop("Cannot take a sample larger than the population without replacement", call. = FALSE)
+  }
 
   # Return call from C
   return(
     x[.Call(
       "r_xoshiro_shuffle",
       as.integer(seq_along(x)),
-      swiftelse(is.null(seed), 0, seed),
+      call_seed(seed),
       PACKAGE = "psychNetwoRk"
     )][seq_len(size)]
   )
@@ -75,16 +187,21 @@ shuffle <- function(x, size = length(x), seed = NULL)
 #' @noRd
 # Weighted Shuffle (without replacement) ----
 # Uses xoshiro256++ random number generation: https://prng.di.unimi.it/
-# Updated 14.04.2026
+# Updated 20.11.2026
 weighted_shuffle <- function(x, size = length(x), prob, seed = NULL)
 {
+
+  # Check size
+  if(size > length(x)){
+    stop("Cannot take a sample larger than the population without replacement", call. = FALSE)
+  }
 
   # Return call from C
   return(
     x[.Call(
       "r_xoshiro_weighted_shuffle",
-      as.integer(seq_along(x)), prob,
-      swiftelse(is.null(seed), 0, seed),
+      as.integer(seq_along(x)), as.numeric(prob),
+      call_seed(seed),
       PACKAGE = "psychNetwoRk"
     )][seq_len(size)]
   )
@@ -94,15 +211,25 @@ weighted_shuffle <- function(x, size = length(x), prob, seed = NULL)
 #' @noRd
 # Shuffle (with replacement) ----
 # Uses xoshiro256++ random number generation: https://prng.di.unimi.it/
-# Updated 10.03.2026
+# Updated 20.11.2026
 shuffle_replace <- function(x, size = length(x), seed = NULL)
 {
+
+  # No draws
+  if(size == 0){
+    return(x[0])
+  }
+
+  # Check for values to sample from
+  if(length(x) == 0){
+    stop("Cannot sample from an empty vector", call. = FALSE)
+  }
 
   # Return call from C
   return(
     x[.Call(
       "r_xoshiro_shuffle_replace",
-      x, size, swiftelse(is.null(seed), 0, seed),
+      x, as.integer(size), call_seed(seed),
       PACKAGE = "psychNetwoRk"
     )]
   )
@@ -112,7 +239,7 @@ shuffle_replace <- function(x, size = length(x), seed = NULL)
 #' @noRd
 # Random normal generation with Ziggurat ----
 # https://people.sc.fsu.edu/~jburkardt/cpp_src/ziggurat/ziggurat.html
-# Updated 27.07.2023
+# Updated 20.11.2026
 rnorm_ziggurat <- function(n, seed = NULL)
 {
 
@@ -121,10 +248,71 @@ rnorm_ziggurat <- function(n, seed = NULL)
     .Call(
       "r_ziggurat",
       as.integer(n),
-      swiftelse(is.null(seed), 0, seed),
+      call_seed(seed),
       PACKAGE = "psychNetwoRk"
     )
   )
+
+}
+
+#' @noRd
+# Rank with ties broken at random (C random number generator) ----
+# Updated 20.11.2026
+rank_random <- function(x)
+{
+
+  # Order by value, then by a random tie-breaker
+  ranks <- integer(length(x))
+  ranks[order(x, runif_xoshiro(length(x)))] <- seq_along(x)
+
+  # Return ranks
+  return(ranks)
+
+}
+
+#' @noRd
+# Node names ("V1", ..., or zero-padded "V01", ...) ----
+# Updated 20.11.2026
+node_names <- function(nodes)
+{
+  return(paste0("V", format_integer(seq_len(nodes), digits(nodes) - 1)))
+}
+
+#' @noRd
+# Ring distances between nodes ----
+# min(|i - j|, n - |i - j|)
+# Updated 20.11.2026
+ring_distance <- function(nodes)
+{
+
+  # Node sequence
+  node_sequence <- seq_len(nodes)
+
+  # Distances
+  distance_matrix <- abs(outer(node_sequence, node_sequence, "-"))
+
+  # Return ring distances
+  return(pmin(distance_matrix, nodes - distance_matrix))
+
+}
+
+#' @noRd
+# Sample skewness ----
+# Same as `psych::skew` (type = 3): b1 = m3 / m2^(3/2) * ((n - 1) / n)^(3/2)
+# Updated 20.11.2026
+sample_skewness <- function(x)
+{
+
+  # Center data
+  n <- length(x)
+  centered <- x - mean(x)
+
+  # Moments
+  m2 <- sum(centered^2) / n
+  m3 <- sum(centered^3) / n
+
+  # Return skewness
+  return((m3 / m2^1.5) * ((n - 1) / n)^1.5)
 
 }
 
@@ -160,52 +348,50 @@ skew_single_variable <- function(data, skew_values){
 # https://doi.org/10.1177/0013164410389489
 #
 #' @noRd
-# Generates skewed data for continuous data ----
-# Updated 13.03.2026
-skew_continuous <- function(skew, data = NULL, sample_size = 1e06, tolerance = 1e-05)
+# Cache of fitted skew transformations ----
+# Updated 20.11.2026
+skew_cache <- new.env(parent = emptyenv())
+
+#' @noRd
+# Fit the skew transformation in the population ----
+# Finds the sinh-arcsinh transformation sinh(k * (asinh(x) + m)) whose skew
+# on the standard normal distribution (evaluated on a fine grid of normal
+# quantiles) equals the target, along with the population mean and standard
+# deviation of the transformed variable (for standardization). Results are
+# cached by skew value
+# Updated 20.11.2026
+skew_transformation <- function(absolute, tolerance = 1e-06, max_iterations = 1000)
 {
 
-  # Generate data
-  if(is.null(data)){
-    data <- rnorm_ziggurat(sample_size)
+  # Check cache
+  key <- format(absolute, digits = 15)
+  if(!is.null(skew_cache[[key]])){
+    return(skew_cache[[key]])
   }
 
-  # Check for zero skew (add minimal skew)
-  if(skew == 0){
-    return(data)
-  }
+  # Standard normal distribution (quantile grid)
+  arcsinh_reference <- asinh(qnorm(ppoints(20000)))
 
-  # Obtain sign and absolute skew
-  skew_sign <- sign(skew)
-  absolute <- abs(skew)
-
-  # Compute arcsinh once
-  arcsinh_data <- asinh(data)
-
-  # Initialize kurtosis
-  kurtosis <- 1
-
-  # Optimize for result
+  # Optimize location for a given tail weight
   objective <- function(kurtosis){
-
-    # Optimize for skew
     optimize(
       f = function(x){
-        abs(absolute - psych::skew(sinh(kurtosis * (arcsinh_data + x))))
+        abs(absolute - sample_skewness(sinh(kurtosis * (arcsinh_reference + x))))
       }, interval = c(0, absolute + 2), tol = tolerance
     )
-
   }
 
-  # Repeat until convergence
-  repeat{
+  # Increase tail weight until the target skew is reached
+  kurtosis <- 1
+  best <- NULL
+  for(iteration in seq_len(max_iterations)){
 
     # Get result
-    result <- silent_call(objective(kurtosis))
+    result <- objective(kurtosis)
 
-    # Check for minimum too low
-    if(is.na(result$objective)){
-      return(data)
+    # Store best result
+    if(is.null(best) || result$objective < best$objective){
+      best <- list(kurtosis = kurtosis, location = result$minimum, objective = result$objective)
     }
 
     # Check for tolerance
@@ -218,8 +404,51 @@ skew_continuous <- function(skew, data = NULL, sample_size = 1e06, tolerance = 1
 
   }
 
-  # Return result
-  return(skew_sign * scale(sinh(kurtosis * (arcsinh_data + result$minimum))))
+  # Population moments of the transformed variable
+  transformed <- sinh(best$kurtosis * (arcsinh_reference + best$location))
+  best$mean <- mean(transformed)
+  best$sd <- sqrt(mean((transformed - best$mean)^2))
+
+  # Store and return
+  skew_cache[[key]] <- best
+  return(best)
+
+}
+
+#' @noRd
+# Generates skewed data for continuous data ----
+# A sinh-arcsinh transformation whose skew on the standard normal
+# distribution equals `skew` (the skew is a population value; sample skews
+# vary around it). Negative skew transforms the reflected data and reflects
+# back, -f(-x), so the transformation is increasing and correlations keep
+# their sign. Skewed variables are standardized with the population mean and
+# standard deviation of the transformation (unskewed variables are already
+# standard normal in the population)
+# Updated 20.11.2026
+skew_continuous <- function(skew, data = NULL, sample_size = 1e06)
+{
+
+  # Generate data
+  if(is.null(data)){
+    data <- rnorm_ziggurat(sample_size)
+  }
+
+  # Check for zero skew
+  if(skew == 0){
+    return(data)
+  }
+
+  # Obtain sign and transformation
+  skew_sign <- sign(skew)
+  transformation <- skew_transformation(abs(skew))
+
+  # Transform (reflected for negative skew)
+  transformed <- sinh(
+    transformation$kurtosis * (asinh(skew_sign * data) + transformation$location)
+  )
+
+  # Return standardized result (reflected back for negative skew)
+  return(skew_sign * (transformed - transformation$mean) / transformation$sd)
 
 }
 
@@ -468,13 +697,32 @@ set_default <- function(argument, default, FUN, several.ok = FALSE)
     return(default)
   }
 
-  # Return default if length > 1 and several are NOT okay
-  if(length(argument) > 1 & !several.ok){
-    return(default)
-  }
-
   # Get argument name
   argument_name <- as.character(substitute(argument))
+
+  # Several values are only allowed when `several.ok = TRUE`
+  # (the full vector of choices is the missing-argument default)
+  if(length(argument) > 1 && !several.ok){
+
+    # Get choices
+    choices <- swiftelse(
+      is.function(FUN), tolower(eval(formals(FUN)[[argument_name]])), tolower(FUN)
+    )
+
+    # Return default when all choices are given (argument is missing)
+    if(setequal(tolower(argument), choices)){
+      return(default)
+    }
+
+    # Otherwise, error
+    stop(
+      paste0(
+        "Only one value can be used for '", argument_name, "'. Please choose from: ",
+        paste0("\"", choices, "\"", collapse = ", ")
+      ), call. = FALSE
+    )
+
+  }
 
   # Get choices for the function
   if(!is.function(FUN)){ # choices are provided in 'FUN'
@@ -590,11 +838,9 @@ typeof_error <- function(input, expected_value, function_name){
     typeof_input %in% c("integer", "double"),
     "numeric", typeof_input
   )
-  ## Expected value
-  expected_value <- swiftelse(
-    any(expected_value %in% c("integer", "double")),
-    "numeric", expected_value
-  )
+  ## Expected value (keeps other expected types)
+  expected_value[expected_value %in% c("integer", "double")] <- "numeric"
+  expected_value <- unique(expected_value)
 
   # Check for value
   if(!typeof_input %in% expected_value){
@@ -646,12 +892,27 @@ range_error <- function(input, expected_ranges, function_name){
   expected_maximum <- max(expected_ranges, na.rm = TRUE)
   expected_minimum <- min(expected_ranges, na.rm = TRUE)
 
+  # Check for missing values
+  if(anyNA(input)){
+    .handleSimpleError(
+      h = stop,
+      msg = paste0(
+        "Input into '", deparse(substitute(input)), "' contains missing (NA) values"
+      ),
+      call = function_name
+    )
+  }
+
   # Obtain maximum and minimum values
-  actual_maximum <- round(max(input, na.rm = TRUE), 3)
-  actual_minimum <- round(min(input, na.rm = TRUE), 3)
+  # (compared unrounded with a small tolerance for floating point error;
+  # rounded only for the message)
+  actual_maximum <- max(input)
+  actual_minimum <- min(input)
+  tolerance <- 1e-12
 
   # Check for maximum of input in expected range
-  if(actual_maximum > expected_maximum){
+  if(actual_maximum > expected_maximum + tolerance){
+    actual_maximum <- signif(actual_maximum, 6)
     .handleSimpleError(
       h = stop,
       msg = paste0(
@@ -665,8 +926,9 @@ range_error <- function(input, expected_ranges, function_name){
     )
   }
 
-  # Check for maximum of input in expected range
-  if(actual_minimum < expected_minimum){
+  # Check for minimum of input in expected range
+  if(actual_minimum < expected_minimum - tolerance){
+    actual_minimum <- signif(actual_minimum, 6)
     .handleSimpleError(
       h = stop,
       msg = paste0(

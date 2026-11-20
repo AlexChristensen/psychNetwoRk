@@ -7,9 +7,8 @@
 #' @useDynLib psychNetwoRk, .registration = TRUE
 #'
 #' @importFrom methods is
-#' @importFrom stats cov2cor optim optimize pchisq qchisq setNames uniroot
+#' @importFrom stats cov2cor optim optimize pchisq ppoints qchisq qnorm setNames uniroot
 #' @importFrom utils capture.output data
 #'
 "_PACKAGE"
-#> [1] "_PACKAGE"
 #psychNetwoRk----

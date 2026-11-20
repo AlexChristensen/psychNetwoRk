@@ -81,7 +81,7 @@ Generates GGM data from a small-world topology via a three-stage process closely
 
 **Reference:** Christensen et al. (2026; [arXiv:2609.05678](https://doi.org/10.48550/arXiv.2609.05678)).
 
-**Returns:** a named list with `data`, `parameters` (including `omega` smallworldness), `population` (`R`, `Omega`), and `convergence`.
+**Returns:** a named list with `data`, `parameters` (including `omega` smallworldness; for `simulate_smallworld()` it is computed against the pruned lattice the network was generated from, whereas `smallworldness()` defaults to a degree-preserving `proxswap_lattice()`, so the two are not directly comparable), `population` (`R`, `Omega`), and `convergence`.
 
 ```r
 result <- simulate_smallworld(
@@ -109,8 +109,9 @@ Generates GGM data with explicit community (block) structure, where edge density
 | `density_matrix` | `blocks × blocks` symmetric matrix of edge probabilities |
 | `snr` | Signal-to-noise ratio; default `1` |
 | `negative_proportion` | Fraction of between-community edges signed negative; default from empirical distribution |
-| `diffusion` | Minimum proportion of top edges placed outside communities; default `0.30` |
+| `diffusion` | Controls the floor on within-community weight concentration: `1 - diffusion` of within-community edges are reserved for the top-ranked weights; default `0` |
 | `diffusion_range` | If provided, `diffusion` is drawn uniformly from this interval each call |
+| `seed` | Seed for reproducible results (default `NULL`, random) |
 | `sample_size` | Number of observations to generate |
 | `skew` / `skew_range` | Per-variable skew in $[-2, 2]$; default `0` |
 
@@ -173,12 +174,13 @@ Perturbs the population correlation matrix of a `simulate_sbm()` or `simulate_sm
 | `metric` | Fit index to target: `"CFI"`, `"TLI"`, `"RMSEA"`, or `"SRMR"`; default depends on `method` (`"CFI"` for `"cb"` and `"tkl"`; `"RMSEA"` for `"wb"`; `"SRMR"` for `"hb"`) |
 | `fit_value` | Target value of `metric` in $(0, 1)$; default is the conventional cutoff (CFI/TLI `0.95`, RMSEA `0.06`, SRMR `0.05`) |
 | `tolerance` | Maximum absolute difference between `fit_value` and the achieved `metric`; default `0.01` |
-| `max_iterations` | Maximum optimization attempts (random starts or draws); default `10` |
-| `control` | Method options: `minor_factors` (`max(50, 2 * nodes)`) and `decay` (`0.30`) for `"tkl"`; `omitted` (`0.10`, proportion of zero edges) for `"hb"` |
+| `max_iterations` | Maximum optimization attempts (random draws of the error); attempts continue until `fit_value` is matched; default `10` |
+| `seed` | Seed for reproducible results (default `NULL`, random) |
+| `control` | Method options: `minor_factors` (`max(50, 2 * nodes)`) and `decay` (`0.30`) for `"tkl"`; `omitted` (`0.10`, proportion of zero edges) and `max_condition` (`1000`, largest condition number of the population correlation matrix with error; `Inf` for no limit) for `"hb"` |
 
 **References:** Cudeck & Browne (1992); Tucker et al. (1969); Wu & Browne (2015); Hu & Bentler (1998).
 
-**Returns:** the input object with class `"ggm_pe"` appended and a `population_error` element containing `method`, `metric`, `fit_value`, `achieved`, `fit` (CFI, TLI, RMSEA, and SRMR achieved), `delta`, `error`, `max_error`, `R_difference`, and `iterations`. `R_difference` is near zero only when the error is orthogonal to the true network (`"cb"`). The `population` element has `R` updated (with error) and gains `Omega_pseudo` (pseudo-true network), `P` (partial correlations of `R`), and `discrepancy` (`Omega_pseudo - Omega`).
+**Returns:** the input object with class `"ggm_pe"` appended and a `population_error` element containing `method`, `metric`, `fit_value`, `achieved`, `fit` (CFI, TLI, RMSEA, and SRMR achieved), `delta`, `error`, `max_error`, `R_difference`, and `iterations`. `R_difference` is near zero only when the error is orthogonal to the true network (`"cb"`). The `population` element has `R` updated (with error) and gains `Omega_pseudo` (pseudo-true network), `Omega_error` (partial correlations of `R`), and `discrepancy` (`Omega_pseudo - Omega`).
 
 ```r
 dm <- matrix(0.20, nrow = 3, ncol = 3)
@@ -203,7 +205,7 @@ The shared simulation pipeline is implemented in `helpers_simulation.R` and hand
 
 **`condition_network()`** recovers positive definiteness by adding a minimal ridge penalty $\lambda$ to the diagonal of the precision matrix via `uniroot()`, targeting a user-specified condition number. Maximum shrinkage is capped at approximately 23% following Peeters et al. (2020).
 
-**`simulate_data()`** generates multivariate normal observations via a Cholesky decomposition of the population correlation matrix $\mathbf{R}$, then applies variable-level skew transformations. Skew values are rounded to the nearest 0.05 increment within $[-2, 2]$; if `skew_range` is provided, per-variable skew is drawn uniformly from the interval.
+**`simulate_data()`** generates multivariate normal observations via a Cholesky decomposition of the population correlation matrix $\mathbf{R}$, then applies variable-level skew transformations. Skew values are rounded to the nearest 0.05 increment within $[-2, 2]$; if `skew_range` is provided, each variable's skew is drawn from the values in the interval (increments of 0.05). Skew is the population skew (the transformation is fitted on the standard normal distribution); negative skew is the reflection of positive skew, so skewing never changes the sign of a variable's correlations, and skewed variables are standardized with population moments.
 
 </details>
 

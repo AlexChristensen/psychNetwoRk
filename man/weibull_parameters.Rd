@@ -4,16 +4,17 @@
 \alias{weibull_parameters}
 \title{Predict Weibull Parameters for Edge Weight Distributions}
 \usage{
-weibull_parameters(nodes, snr = 1, bootstrap = FALSE)
+weibull_parameters(nodes, snr = 1, bootstrap = FALSE, seed = NULL)
 }
 \arguments{
 \item{nodes}{Numeric (length = 1).
-The number of nodes (variables) in the network.
-Must be between 8 and 54, reflecting the range of the empirical networks
-used to fit the underlying SUR model.}
+The number of nodes (variables) in the network (at least 2).
+Values outside of 8 to 54, the range of the empirical networks used to fit
+the underlying SUR model, extrapolate the model and give a warning.}
 
 \item{snr}{Numeric (length = 1).
-Signal-to-noise ratio of partial correlations (\eqn{\bar{|w|} / \mathrm{SD}(|w|)}).
+Signal-to-noise ratio of partial correlations (\eqn{\bar{|w|} / \mathrm{SD}(|w|)});
+must be positive.
 Values less than 1 indicate wider range of partial correlations (\eqn{w}) whereas
 values greater than 1 indicate narrower range.
 Defaults to \code{1} where the mean of the partial correlations (\eqn{\bar{|w|}})
@@ -23,6 +24,11 @@ is equal to the standard deviation (\eqn{\mathrm{SD}(|w|)})}
 the SUR model fit is added to each predicted parameter, introducing
 empirically grounded variability suitable for use in simulation or
 bootstrapping contexts. Defaults to \code{FALSE}.}
+
+\item{seed}{Numeric (length = 1).
+Seed for reproducible results when \code{bootstrap = TRUE}. The same
+\code{seed} gives the same results (and does not change the random number
+stream of the R session). Defaults to \code{NULL} (random seed)}
 }
 \value{
 A named numeric vector of length 2:

@@ -10,16 +10,22 @@
 #' log-normal alternatives.
 #'
 #' @param nodes Numeric (length = 1).
-#' The number of nodes (variables) in the network.
-#' Must be between 8 and 54, reflecting the range of the empirical networks
-#' used to fit the underlying SUR model.
+#' The number of nodes (variables) in the network (at least 2).
+#' Values outside of 8 to 54, the range of the empirical networks used to fit
+#' the underlying SUR model, extrapolate the model and give a warning.
 #'
 #' @param snr Numeric (length = 1).
-#' Signal-to-noise ratio of partial correlations (\eqn{\bar{|w|} / \mathrm{SD}(|w|)}).
+#' Signal-to-noise ratio of partial correlations (\eqn{\bar{|w|} / \mathrm{SD}(|w|)});
+#' must be positive.
 #' Values less than 1 indicate wider range of partial correlations (\eqn{w}) whereas
 #' values greater than 1 indicate narrower range.
 #' Defaults to \code{1} where the mean of the partial correlations (\eqn{\bar{|w|}})
 #' is equal to the standard deviation (\eqn{\mathrm{SD}(|w|)})
+#'
+#' @param seed Numeric (length = 1).
+#' Seed for reproducible results when \code{bootstrap = TRUE}. The same
+#' \code{seed} gives the same results (and does not change the random number
+#' stream of the R session). Defaults to \code{NULL} (random seed)
 #'
 #' @param bootstrap Boolean (length = 1). If \code{TRUE}, a randomly sampled residual from
 #' the SUR model fit is added to each predicted parameter, introducing
@@ -95,8 +101,32 @@
 #'
 # Predict Weibull parameters ----
 # Updated 18.11.2026
-weibull_parameters <- function(nodes, snr = 1, bootstrap = FALSE)
+weibull_parameters <- function(nodes, snr = 1, bootstrap = FALSE, seed = NULL)
 {
+
+  # Set seed (reproducible results)
+  seed_token <- seed_start(seed)
+  on.exit(seed_end(seed_token), add = TRUE)
+
+  # Check inputs
+  typeof_error(nodes, "numeric", "weibull_parameters")
+  length_error(nodes, 1, "weibull_parameters")
+  range_error(nodes, c(2, Inf), "weibull_parameters")
+  typeof_error(snr, "numeric", "weibull_parameters")
+  length_error(snr, 1, "weibull_parameters")
+  range_error(snr, c(.Machine$double.eps, Inf), "weibull_parameters")
+  typeof_error(bootstrap, "logical", "weibull_parameters")
+  length_error(bootstrap, 1, "weibull_parameters")
+
+  # Warn outside of the range of the empirical networks
+  if(nodes < 8 || nodes > 54){
+    warning(
+      paste0(
+        "`nodes` (", nodes, ") is outside of the range of the empirical networks ",
+        "used to fit the model (8-54); parameters are extrapolated"
+      ), call. = FALSE
+    )
+  }
 
   # Get Weibull model
   weibull_weights <- get(data("weibull_weights", package = "psychNetwoRk", envir = environment()))
@@ -104,12 +134,14 @@ weibull_parameters <- function(nodes, snr = 1, bootstrap = FALSE)
   # Compute descriptive parameters
   scale_parameters <- shape_parameters <- c(snr = snr, rlp = 1 / log(nodes))
 
-  # Compute Weibull parameters
+  # Compute Weibull parameters (coefficients matched by name)
+  shape_coefficients <- weibull_weights$shape$coefficients
+  scale_coefficients <- weibull_weights$scale$coefficients
   shape <- unname(
-    weibull_weights$shape$coefficients[1] + sum(weibull_weights$shape$coefficients[-1] * shape_parameters)
+    shape_coefficients[1] + sum(shape_coefficients[-1] * shape_parameters[sub("^shape_", "", names(shape_coefficients)[-1])])
   )
   scale <- unname(
-    weibull_weights$scale$coefficients[1] + sum(weibull_weights$scale$coefficients[-1] * scale_parameters)
+    scale_coefficients[1] + sum(scale_coefficients[-1] * scale_parameters[sub("^scale_", "", names(scale_coefficients)[-1])])
   )
 
   # Bootstrap residuals

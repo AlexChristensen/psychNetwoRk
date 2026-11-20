@@ -15,7 +15,8 @@ simulate_smallworld(
   skew_range = NULL,
   target_condition = 30,
   max_correlation = 0.8,
-  max_iterations = 100
+  max_iterations = 100,
+  seed = NULL
 )
 }
 \arguments{
@@ -24,8 +25,7 @@ Number of nodes in the network.
 Minimum of three nodes. The total number of nodes should be between 8
 and 54 to remain within the range of the empirical networks used to fit
 the Weibull parameter model; values outside this range are accepted but
-will trigger extrapolation and may produce a warning from
-\code{\link{weibull_parameters}}.}
+extrapolate the model and give a warning.}
 
 \item{density}{Numeric (length = 1).
 Target edge density of the network after pruning the initial ring lattice.
@@ -55,7 +55,9 @@ defined as \eqn{\bar{|w|} / \mathrm{SD}(|w|)}. Values less than 1
 produce wider, more heterogeneous weight distributions; values greater
 than 1 produce narrower, more homogeneous distributions. Empirically
 observed SNR values ranged from 0.648 to 1.712; values outside this
-range are accepted but will trigger a warning. Defaults to \code{1}.}
+range are accepted but will trigger a warning (an error is given when the
+predicted edge weight distribution cannot fall within the empirical
+bounds). Defaults to \code{1}.}
 
 \item{negative_proportion}{Numeric (length = 1).
 Proportion of edges that are negative (inhibitory).
@@ -77,8 +79,9 @@ per variable. Values are rounded to the nearest increment of 0.05 in
 the range \eqn{[-2, 2]}. Defaults to \code{0} (no skew).}
 
 \item{skew_range}{Numeric (length = 2).
-If provided, a skew value is drawn uniformly from this range for each
-variable, overriding \code{skew}. Both values must be between -2 and 2.}
+If provided, a skew value is drawn for each variable from the values in
+this range (in increments of 0.05), overriding \code{skew}. Both values
+must be between -2 and 2.}
 
 \item{target_condition}{Numeric (length = 1).
 Target condition number (using \code{\link{kappa}} with \code{exact =
@@ -86,9 +89,13 @@ TRUE}) applied when ridge regularization is needed to recover a positive
 definite precision matrix. The smallest ridge penalty \eqn{\lambda} that
 brings the condition number to this target is found via root-finding
 (\code{\link{uniroot}}), subject to a maximum shrinkage of approximately
-23\% following Peeters et al. (2020). Lower values produce
-better-conditioned matrices. Defaults to \code{30}. Values up to
-\code{100} are accepted but not recommended.}
+23\% following Peeters et al. (2020). After conditioning, the Weibull
+parameters are re-estimated by maximum likelihood from the conditioned edge
+weights and re-verified against the empirical bounds; draws that fall
+outside the bounds are rejected. Draws whose population correlation matrix
+has a condition number greater than \code{target_condition + 1} are
+rejected. Lower values produce better-conditioned matrices. Defaults to
+\code{30}. Values up to \code{100} are accepted but not recommended.}
 
 \item{max_correlation}{Numeric (length = 1).
 Maximum allowed absolute pairwise correlation in the population
@@ -101,7 +108,13 @@ Maximum number of attempts to find (1) a connected network structure,
 (2) a network satisfying the small-world screening criterion, and (3) a
 valid set of edge weights. The error message reports a frequency table
 of rejection reasons to assist with diagnosing convergence failures.
-Defaults to \code{100}.}
+Pruning the lattice to a connected graph is attempted up to
+\code{max_iterations} times per attempt. Defaults to \code{100}.}
+
+\item{seed}{Numeric (length = 1).
+Seed for reproducible results. The same \code{seed} gives the same results
+(and does not change the random number stream of the R session).
+Defaults to \code{NULL} (random seed)}
 }
 \value{
 A named list of class \code{"ggm_simulate"} with four elements
@@ -135,7 +148,19 @@ A list of input, derived, and estimated parameters:
   \item \code{omega} --- Smallworldness omega statistic of the generated
   network (Telesford et al., 2011). Values near zero indicate small-world
   structure; negative values indicate lattice-like structure; positive
-  values indicate random-like structure (see \code{\link[psychNetwoRk]{smallworldness}})
+  values indicate random-like structure (see \code{\link[psychNetwoRk]{smallworldness}}).
+  The regular (lattice) reference is the pruned ring lattice that the
+  network was generated from (before rewiring), so \code{omega} reflects
+  how far the network moved from its generating lattice (a network with
+  almost no rewiring is near zero or negative). This differs from
+  \code{\link[psychNetwoRk]{smallworldness}} called on \code{Omega}, which
+  by default uses a degree-preserving lattice from
+  \code{\link[psychNetwoRk]{proxswap_lattice}}; the two values are
+  therefore not comparable (the proxswap reference gave omega about 0.3
+  higher on average in simulations). The pruned lattice is not returned;
+  use \code{smallworldness(Omega, method = "omega")} for a reference that
+  depends only on the returned network. Random reference graphs are
+  generated with the default 100 iterations
   \item \code{Q} --- Newman-Girvan modularity of the population network
   (\code{Omega}) computed via \code{igraph::modularity} on absolute edge
   weights, using the community partition returned by
@@ -192,16 +217,17 @@ distance, grounded in the empirical observation that shorter-distance
 connections tend to carry stronger weights in psychometric networks.
 The resulting network is used to generate multivariate normal (or skewed)
 data. Parameters do not have default values (except
-\code{negative_proportion}, \code{snr}, \code{target_condition},
-\code{max_correlation}, and \code{max_iterations}) and must each be set.
+\code{negative_proportion}, \code{snr}, \code{skew}, \code{skew_range},
+\code{target_condition}, \code{max_correlation}, \code{max_iterations},
+and \code{seed}) and must each be set.
 See Details and Examples to get started.
 }
 \details{
 \strong{Lattice generation and pruning}
 
 The generative process begins by constructing a ring lattice with
-\code{neighbors + 1} nearest-neighbor connections per node via
-\code{\link[igraph]{sample_smallworld}} with \code{p = 0}. The
+\code{neighbors + 1} nearest-neighbor connections per node (each node is
+connected to the nodes within ring distance \code{neighbors + 1}). The
 \code{+1} overshoot ensures the lattice always has more edges than the
 target density, guaranteeing that pruning can proceed. The lattice is
 then randomly pruned to the target \code{density} by removing edges
@@ -236,9 +262,10 @@ in the pruned lattice before rewiring. Edges retained from the pruned
 lattice receive their original neighbor distance (1 = nearest neighbor,
 2 = second nearest, etc.); rewired edges are assigned a distance of
 \code{neighbors + 1}, placing them at the bottom of the priority order.
+Ties in distance are broken at random.
 Absolute edge weights are drawn from a Weibull distribution whose
-parameters are predicted from the network size, sample size, and signal-
-to-noise ratio using a Seemingly Unrelated Regression (SUR) model fitted
+parameters are predicted from the network size and signal-to-noise ratio
+using a Seemingly Unrelated Regression (SUR) model fitted
 to 194 empirical psychometric networks (Huth et al., 2025). The sorted
 (descending) Weibull weights are then mapped onto the distance ranking
 so that the largest weights go to the shortest-distance edges. This
@@ -257,7 +284,8 @@ is negative if and only if exactly one of its endpoints is flipped,
 giving an expected negative proportion of \eqn{2 \cdot (k/n) \cdot
 (1 - k/n)} for \eqn{k} flipped nodes out of \eqn{n} total. The formula
 requires \eqn{p \leq 0.50}, which is why \code{negative_proportion} is
-bounded at 0.50.
+bounded at 0.50. The number of flipped nodes is rounded, so very small
+proportions can result in no negative edges.
 }
 \examples{
 # Basic small-world network (moderate density, moderate rewiring)

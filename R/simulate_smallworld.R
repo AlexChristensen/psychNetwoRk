@@ -18,8 +18,9 @@
 #' connections tend to carry stronger weights in psychometric networks.
 #' The resulting network is used to generate multivariate normal (or skewed)
 #' data. Parameters do not have default values (except
-#' \code{negative_proportion}, \code{snr}, \code{target_condition},
-#' \code{max_correlation}, and \code{max_iterations}) and must each be set.
+#' \code{negative_proportion}, \code{snr}, \code{skew}, \code{skew_range},
+#' \code{target_condition}, \code{max_correlation}, \code{max_iterations},
+#' and \code{seed}) and must each be set.
 #' See Details and Examples to get started.
 #'
 #' @param nodes Numeric (length = 1).
@@ -27,8 +28,7 @@
 #' Minimum of three nodes. The total number of nodes should be between 8
 #' and 54 to remain within the range of the empirical networks used to fit
 #' the Weibull parameter model; values outside this range are accepted but
-#' will trigger extrapolation and may produce a warning from
-#' \code{\link{weibull_parameters}}.
+#' extrapolate the model and give a warning.
 #'
 #' @param density Numeric (length = 1).
 #' Target edge density of the network after pruning the initial ring lattice.
@@ -58,7 +58,9 @@
 #' produce wider, more heterogeneous weight distributions; values greater
 #' than 1 produce narrower, more homogeneous distributions. Empirically
 #' observed SNR values ranged from 0.648 to 1.712; values outside this
-#' range are accepted but will trigger a warning. Defaults to \code{1}.
+#' range are accepted but will trigger a warning (an error is given when the
+#' predicted edge weight distribution cannot fall within the empirical
+#' bounds). Defaults to \code{1}.
 #'
 #' @param negative_proportion Numeric (length = 1).
 #' Proportion of edges that are negative (inhibitory).
@@ -80,8 +82,9 @@
 #' the range \eqn{[-2, 2]}. Defaults to \code{0} (no skew).
 #'
 #' @param skew_range Numeric (length = 2).
-#' If provided, a skew value is drawn uniformly from this range for each
-#' variable, overriding \code{skew}. Both values must be between -2 and 2.
+#' If provided, a skew value is drawn for each variable from the values in
+#' this range (in increments of 0.05), overriding \code{skew}. Both values
+#' must be between -2 and 2.
 #'
 #' @param target_condition Numeric (length = 1).
 #' Target condition number (using \code{\link{kappa}} with \code{exact =
@@ -89,9 +92,13 @@
 #' definite precision matrix. The smallest ridge penalty \eqn{\lambda} that
 #' brings the condition number to this target is found via root-finding
 #' (\code{\link{uniroot}}), subject to a maximum shrinkage of approximately
-#' 23\% following Peeters et al. (2020). Lower values produce
-#' better-conditioned matrices. Defaults to \code{30}. Values up to
-#' \code{100} are accepted but not recommended.
+#' 23\% following Peeters et al. (2020). After conditioning, the Weibull
+#' parameters are re-estimated by maximum likelihood from the conditioned edge
+#' weights and re-verified against the empirical bounds; draws that fall
+#' outside the bounds are rejected. Draws whose population correlation matrix
+#' has a condition number greater than \code{target_condition + 1} are
+#' rejected. Lower values produce better-conditioned matrices. Defaults to
+#' \code{30}. Values up to \code{100} are accepted but not recommended.
 #'
 #' @param max_correlation Numeric (length = 1).
 #' Maximum allowed absolute pairwise correlation in the population
@@ -104,14 +111,20 @@
 #' (2) a network satisfying the small-world screening criterion, and (3) a
 #' valid set of edge weights. The error message reports a frequency table
 #' of rejection reasons to assist with diagnosing convergence failures.
-#' Defaults to \code{100}.
+#' Pruning the lattice to a connected graph is attempted up to
+#' \code{max_iterations} times per attempt. Defaults to \code{100}.
+#'
+#' @param seed Numeric (length = 1).
+#' Seed for reproducible results. The same \code{seed} gives the same results
+#' (and does not change the random number stream of the R session).
+#' Defaults to \code{NULL} (random seed)
 #'
 #' @details
 #' \strong{Lattice generation and pruning}
 #'
 #' The generative process begins by constructing a ring lattice with
-#' \code{neighbors + 1} nearest-neighbor connections per node via
-#' \code{\link[igraph]{sample_smallworld}} with \code{p = 0}. The
+#' \code{neighbors + 1} nearest-neighbor connections per node (each node is
+#' connected to the nodes within ring distance \code{neighbors + 1}). The
 #' \code{+1} overshoot ensures the lattice always has more edges than the
 #' target density, guaranteeing that pruning can proceed. The lattice is
 #' then randomly pruned to the target \code{density} by removing edges
@@ -146,9 +159,10 @@
 #' lattice receive their original neighbor distance (1 = nearest neighbor,
 #' 2 = second nearest, etc.); rewired edges are assigned a distance of
 #' \code{neighbors + 1}, placing them at the bottom of the priority order.
+#' Ties in distance are broken at random.
 #' Absolute edge weights are drawn from a Weibull distribution whose
-#' parameters are predicted from the network size, sample size, and signal-
-#' to-noise ratio using a Seemingly Unrelated Regression (SUR) model fitted
+#' parameters are predicted from the network size and signal-to-noise ratio
+#' using a Seemingly Unrelated Regression (SUR) model fitted
 #' to 194 empirical psychometric networks (Huth et al., 2025). The sorted
 #' (descending) Weibull weights are then mapped onto the distance ranking
 #' so that the largest weights go to the shortest-distance edges. This
@@ -167,7 +181,8 @@
 #' giving an expected negative proportion of \eqn{2 \cdot (k/n) \cdot
 #' (1 - k/n)} for \eqn{k} flipped nodes out of \eqn{n} total. The formula
 #' requires \eqn{p \leq 0.50}, which is why \code{negative_proportion} is
-#' bounded at 0.50.
+#' bounded at 0.50. The number of flipped nodes is rounded, so very small
+#' proportions can result in no negative edges.
 #'
 #' @return A named list of class \code{"ggm_simulate"} with four elements
 #' (see \code{\link{add_population_error}} to add population error):
@@ -200,7 +215,19 @@
 #'   \item \code{omega} --- Smallworldness omega statistic of the generated
 #'   network (Telesford et al., 2011). Values near zero indicate small-world
 #'   structure; negative values indicate lattice-like structure; positive
-#'   values indicate random-like structure (see \code{\link[psychNetwoRk]{smallworldness}})
+#'   values indicate random-like structure (see \code{\link[psychNetwoRk]{smallworldness}}).
+#'   The regular (lattice) reference is the pruned ring lattice that the
+#'   network was generated from (before rewiring), so \code{omega} reflects
+#'   how far the network moved from its generating lattice (a network with
+#'   almost no rewiring is near zero or negative). This differs from
+#'   \code{\link[psychNetwoRk]{smallworldness}} called on \code{Omega}, which
+#'   by default uses a degree-preserving lattice from
+#'   \code{\link[psychNetwoRk]{proxswap_lattice}}; the two values are
+#'   therefore not comparable (the proxswap reference gave omega about 0.3
+#'   higher on average in simulations). The pruned lattice is not returned;
+#'   use \code{smallworldness(Omega, method = "omega")} for a reference that
+#'   depends only on the returned network. Random reference graphs are
+#'   generated with the default 100 iterations
 #'   \item \code{Q} --- Newman-Girvan modularity of the population network
 #'   (\code{Omega}) computed via \code{igraph::modularity} on absolute edge
 #'   weights, using the community partition returned by
@@ -316,28 +343,25 @@ simulate_smallworld <- function(
     nodes, density, rewire, snr = 1, negative_proportion,
     sample_size, skew = 0, skew_range = NULL,
     target_condition = 30, max_correlation = 0.80,
-    max_iterations = 100
+    max_iterations = 100, seed = NULL
 )
 {
 
+  # Set seed (reproducible results)
+  seed_token <- seed_start(seed)
+  on.exit(seed_end(seed_token), add = TRUE)
+
   # Check for missing negative proportion
+  # (empirical values, bounded to [0.083, 0.50]; needs to be capped at 0.50
+  # due to flipping variables)
   if(missing(negative_proportion)){
-
-    # Compute proportion of negative edges based on empirical values
-    negative_proportion <- pmin(
-      pmax(
-        0.34 + rnorm_ziggurat(1) * 0.086, # empirical mean +/- 1 SD
-        0.083 # empirical minimum
-      ), 0.50 # empirical maximum (0.54945055)
-      # needs to be capped at 0.50 due to flipping variables
-    )
-
+    negative_proportion <- default_negative_proportion(0.50)
   }
 
   # Check for input errors
   simulate_smallworld_errors(
     nodes, density, rewire, snr, negative_proportion, sample_size,
-    skew, target_condition, max_correlation, max_iterations
+    skew, skew_range, target_condition, max_correlation, max_iterations
   )
 
   # Set neighbors
@@ -349,84 +373,38 @@ simulate_smallworld <- function(
   # Obtain lower triangle
   lower_triangle <- lower.tri(lattice)
 
-  # Initialize iterations
-  iter <- 0
+  # Generate structure and weights (rejected attempts are retried)
+  loop <- simulation_loop(
+    attempt = function(){
 
-  # Initialize condition
-  search <- TRUE
+      # Prune lattice
+      pruned_lattice <- prune2density(lattice, density, nodes, lower_triangle, max_iterations)
 
-  # Collect rejections
-  rejections <- character(length = max_iterations + 1)
+      # Small-world adjacency
+      A <- smallworld_generate(pruned_lattice, rewire, lower_triangle)
 
-  # Generation loop
-  while(search){
+      # Check adjacency
+      if(!igraph::is_connected(convert2igraph(A))){
+        stop("Could not find structure where every node was connected.", call. = FALSE)
+      }
 
-    # Increase iterations
-    iter <- iter + 1
-
-    # Stop on greater than max iterations
-    if(iter > max_iterations){
-
-      # Collect rejections
-      rejection_table <- fast_table(rejections)
-
-      # Remove NULL
-      rejection_table <- rejection_table[names(rejection_table) != ""]
-
-      # Return error
-      stop(
-        paste0(
-          "Reached maximum iterations: Could not find weights that converge for the small-world structure.\n",
-          "Resulting rejections were due to:\n\n",
-          paste0(names(rejection_table), " = ", rejection_table, collapse = "\n")
-        )
+      # Get weights
+      c(
+        smallworld_weights(
+          A, pruned_lattice, nodes, neighbors,
+          snr, negative_proportion, target_condition,
+          max_correlation, lower_triangle
+        ),
+        list(pruned_lattice = pruned_lattice)
       )
 
-    }
-
-    # Prune lattice
-    pruned_lattice <- prune2density(lattice, density, nodes, lower_triangle)
-
-    # Small-world adjacency
-    A <- smallworld_generate(pruned_lattice, rewire, lower_triangle)
-
-    # Check adjacency
-    if(!igraph::is_connected(convert2igraph(A))){
-
-      # Add rejection reason
-      rejections[iter] <- "Could not find structure where every node was connected."
-
-      # Move to next iteration
-      next
-
-    }
-
-    # Try to get good weights
-    output <- try(
-      smallworld_weights(
-        A, pruned_lattice, nodes,
-        snr, negative_proportion, target_condition,
-        max_correlation, lower_triangle
-      ), silent = TRUE
-    )
-
-    # Check for error
-    if(is(output, "try-error")){
-
-      # Add rejection reason
-      rejections[iter] <- trimws(strsplit(output[1], split = "\n")[[1]][2])
-
-      # Move to next iteration
-      next
-
-    }
-
-    # Update search
-    search <- FALSE
-
-
-
-  }
+    },
+    max_iterations = max_iterations, structure = "small-world"
+  )
+  output <- loop$output
+  iter <- loop$iterations
+  rejections <- loop$rejections
+  pruned_lattice <- output$pruned_lattice
 
   # Generate data
   data_output <- simulate_data(
@@ -486,7 +464,7 @@ simulate_smallworld <- function(
 # Updated 16.03.2026
 simulate_smallworld_errors <- function(
     nodes, density, rewire, snr, negative_proportion, sample_size,
-    skew, target_condition, max_correlation, max_iterations
+    skew, skew_range, target_condition, max_correlation, max_iterations
 )
 {
 
@@ -494,6 +472,18 @@ simulate_smallworld_errors <- function(
   typeof_error(nodes, "numeric", "simulate_smallworld")
   length_error(nodes, 1, "simulate_smallworld")
   range_error(nodes, c(3, Inf), "simulate_smallworld")
+  whole_number_error(nodes, "simulate_smallworld")
+
+  # Warn outside of the range of the empirical networks
+  if(nodes < 8 || nodes > 54){
+    warning(
+      paste0(
+        "The number of nodes (", nodes, ") is outside of the range of the ",
+        "empirical networks used to fit the Weibull parameter model (8-54); ",
+        "edge weights are extrapolated"
+      ), call. = FALSE
+    )
+  }
 
   # Errors for 'density'
   typeof_error(density, "numeric", "simulate_smallworld")
@@ -511,7 +501,7 @@ simulate_smallworld_errors <- function(
         "Target density (", round(density, 3), ") is too low to maintain ",
         "a connected graph for ", nodes, " nodes. ",
         "Minimum required density: ", round(min_edges / (nodes * (nodes - 1) / 2), 3)
-      )
+      ), call. = FALSE
     )
   }
 
@@ -520,48 +510,12 @@ simulate_smallworld_errors <- function(
   length_error(rewire, 1, "simulate_smallworld")
   range_error(rewire, c(0, 1), "simulate_smallworld")
 
-  # Error for 'snr'
-  typeof_error(snr, "numeric", "simulate_smallworld")
-  length_error(snr, 1, "simulate_smallworld")
-  range_error(snr, c(0.01, Inf), "simulate_smallworld")
-
-  # Send warning if beyond bounds
-  if((snr < 0.64) | (snr > 1.72)){
-    warning(paste0(
-      "The signal-to-ratio specified (", round(snr, 2), ") is beyond ",
-      "the bounds of cataloged empirical data (0.64-1.72). "
-    ))
-  }
-
-  # Errors for 'negative_proportion'
-  typeof_error(negative_proportion, "numeric", "simulate_smallworld")
-  length_error(negative_proportion, 1, "simulate_smallworld")
-  range_error(negative_proportion, c(0, 0.50), "simulate_smallworld")
-
-  # Errors for 'sample_size'
-  typeof_error(sample_size, "numeric", "simulate_smallworld")
-  length_error(sample_size, 1, "simulate_smallworld")
-  range_error(sample_size, c(1, Inf), "simulate_smallworld")
-
-  # Errors for 'skew'
-  typeof_error(skew, "numeric", "simulate_smallworld")
-  length_error(skew, c(1, nodes), "simulate_smallworld")
-  range_error(skew, c(-2, 2), "simulate_smallworld")
-
-  # Errors for 'target_condition'
-  typeof_error(target_condition, "numeric", "simulate_smallworld")
-  length_error(target_condition, 1, "simulate_smallworld")
-  range_error(target_condition, c(1, 100), "simulate_smallworld")
-
-  # Errors for 'max_correlation'
-  typeof_error(max_correlation, "numeric", "simulate_smallworld")
-  length_error(max_correlation, 1, "simulate_smallworld")
-  range_error(max_correlation, c(0, 1), "simulate_smallworld")
-
-  # Errors for 'max_iterations'
-  typeof_error(max_iterations, "numeric", "simulate_smallworld")
-  length_error(max_iterations, 1, "simulate_smallworld")
-  range_error(max_iterations, c(1, Inf), "simulate_smallworld")
+  # Shared errors
+  check_simulation_inputs(
+    nodes, snr, negative_proportion, 0.50, sample_size,
+    skew, skew_range, target_condition, max_correlation, max_iterations,
+    "simulate_smallworld"
+  )
 
 }
 
@@ -581,8 +535,8 @@ get_neighbors <- function(nodes, density)
   return(
     max(
       min(
-        max(round(edges / nodes), 1), # maximum neighbors
-        floor(half_df) # minimum degrees of freedom
+        max(round(edges / nodes), 1), # neighbors implied by the density
+        floor(half_df) # at most half of the other nodes
       ), 2 # at least two neighbors
     )
   )
@@ -599,8 +553,7 @@ lattice_generate <- function(nodes, neighbors)
   node_sequence <- seq_len(nodes)
 
   # Set up distance matrix
-  distance_matrix <- abs(outer(node_sequence, node_sequence, "-"))
-  distance_matrix <- pmin(distance_matrix, nodes - distance_matrix)
+  distance_matrix <- ring_distance(nodes)
 
   # Convert distance matrix to zeros and ones
   distance_matrix[] <- as.numeric(distance_matrix <= neighbors)
@@ -616,7 +569,7 @@ lattice_generate <- function(nodes, neighbors)
 #' @noRd
 # Prune neighbors to density ----
 # Updated 13.04.2026
-prune2density <- function(lattice, density, nodes, lower_triangle)
+prune2density <- function(lattice, density, nodes, lower_triangle, max_attempts = 100)
 {
 
   # Store original lattice
@@ -630,11 +583,18 @@ prune2density <- function(lattice, density, nodes, lower_triangle)
     density * (nodes * (nodes - 1) / 2)
   )
 
-  # Initilaize connectedness
+  # Initialize connectedness
   connected <- FALSE
+  attempts <- 0
 
-  # Connecteness loop
+  # Connectedness loop
   while(!connected){
+
+    # Check for maximum attempts
+    attempts <- attempts + 1
+    if(attempts > max_attempts){
+      stop("Could not prune the lattice to a connected graph at the target density", call. = FALSE)
+    }
 
     # Initialize lower lattice
     lattice_lower <- lattice_copy
@@ -767,42 +727,24 @@ smallworld_generate <- function(lattice, rewire, lower_triangle)
 # Smallworld weight generation ----
 # Updated 18.11.2026
 smallworld_weights <- function(
-    A, lattice, nodes,
+    A, lattice, nodes, neighbors,
     snr, negative_proportion, target_condition,
     max_correlation, lower_triangle
 )
 {
 
-  # Set node sequence
-  node_sequence <- seq_len(nodes)
-
   # Set up distance matrix
-  distance_matrix <- abs(outer(node_sequence, node_sequence, "-"))
-  distance_matrix <- pmin(distance_matrix, nodes - distance_matrix)
+  distance_matrix <- ring_distance(nodes)
 
   # Set edges
   lattice_edges <- lattice == 1
   A_edges <- A == 1
 
-  # Set up smallworld distances
-  smallworld <- matrix(0, nrow = nodes, ncol = nodes)
-
-  # Get sorted rewired distances
-  rewired_distances <- sort(distance_matrix[lower_triangle][(lattice_edges & !A_edges)[lower_triangle]])
-
-  # Set index for rewired indices
-  rewired_index <- !lattice_edges & A_edges
-
-  # Set up lower triangle with rewired distances
-  smallworld[lower_triangle][rewired_index[lower_triangle]] <- rewired_distances[
-    rank(distance_matrix[lower_triangle][rewired_index[lower_triangle]], ties.method = "random")
-  ]
-
-  # Make symmetric
-  smallworld <- smallworld + t(smallworld)
-
-  # Multiply retained by distance matrix
-  smallworld <- smallworld + ((lattice_edges & A_edges) * distance_matrix)
+  # Distances in the small-world network: edges retained from the pruned
+  # lattice keep their ring distance; rewired edges are assigned a distance
+  # of `neighbors + 1` (the bottom of the priority order)
+  smallworld <- (lattice_edges & A_edges) * distance_matrix
+  smallworld[!lattice_edges & A_edges] <- neighbors + 1
 
   # Obtain nonzero edges
   nonzero <- A[lower_triangle] != 0
@@ -813,67 +755,22 @@ smallworld_weights <- function(
   # Generate edges (returned edges are sorted)
   edges <- generate_edges(nonzero = sum(nonzero), p = nodes, snr = snr)
 
-  # Set weights order
+  # Set weights order (ties broken at random)
   # Follows: Muldoon, Bridgeford, & Bassett's (2016) implementation
-  weight_order <- rank(smallworld[lower_triangle][nonzero], ties.method = "random")
+  weight_order <- rank_random(smallworld[lower_triangle][nonzero])
   network[lower_triangle][nonzero] <- edges[weight_order]
   network <- network + t(network) # make symmetric
 
   # Get signs
   network <- determine_signs(network, nodes, negative_proportion)
 
-  # Get population values
-  R <- silent_call(pcor2cor(network))
+  # Add names
+  dimnames(network) <- list(node_names(nodes), node_names(nodes))
 
-  # Set lambda
-  lambda <- NA
-
-  # Check for positive definite
-  if(anyNA(R) || !is_positive_definite(R)){
-
-    # Try to condition network
-    output <- try(condition_network(network, target_condition), silent = TRUE)
-
-    # Check for whether correlation matrix is conditioned
-    if(is(output, "try-error")){
-      stop("Ill-conditioned")
-    }
-
-    # Store outputs
-    lambda <- output$lambda
-
-    # Update network and correlations
-    P <- cor2pcor(output$R)
-    P[network == 0] <- 0
-    network <- P
-    R <- pcor2cor(network)
-
-    # Check for positive definite again
-    if(anyNA(R) || !is_positive_definite(R)){
-      stop("Not positive definite")
-    }
-
-  }
-
-  # Check for condition
-  condition <- fast_kappa(R)
-  if(condition > (target_condition + 1)){
-    stop("Condition number exceeds target")
-  }
-
-  # Check for maximum correlation
-  if(max(abs(R[lower_triangle])) > max_correlation){
-    stop("Max correlation exceeds target")
-  }
-
-  # Return results
+  # Population correlations, conditioning, and validity checks
   return(
-    list(
-      R = R,
-      network = network,
-      params = attr(edges, "params"),
-      lambda = lambda,
-      condition = condition
+    condition_and_validate(
+      network, attr(edges, "params"), target_condition, max_correlation, lower_triangle
     )
   )
 
@@ -894,8 +791,13 @@ determine_signs <- function(network, nodes, negative_proportion)
   flip_proportion <- (1 - sqrt(1 - 2 * negative_proportion)) / 2
   flip_number <- round(nodes * flip_proportion)
 
-  # Flip at least one
-  flip_number <- max(1, min(flip_number, floor(nodes / 2)))
+  # Number of flipped nodes (at most half of the nodes)
+  flip_number <- min(flip_number, floor(nodes / 2))
+
+  # Check for no flips
+  if(flip_number == 0){
+    return(network)
+  }
 
   # Determine node indices
   index <- shuffle(seq_len(nodes), flip_number)

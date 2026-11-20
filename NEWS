@@ -1,5 +1,96 @@
 Version 0.1.0
 
+o NEW: `control$max_condition` (default 1000) for `method = "hb"` in
+  `add_population_error()` limits the condition number of the population
+  correlation matrix with error. Estimating the true network (GLASSO) becomes
+  very slow on nearly singular matrices (a single fit could take 20 seconds for
+  54 nodes), which occur only at the largest errors the omitted edges can add.
+  Across 46 networks, the limit removed 87% of the fitting time and kept nearly
+  all of the reachable misfit (CFI, TLI, and SRMR peak well before the limit;
+  RMSEA reach was 98% on average). A warning is given when `fit_value` needs
+  more error than the limit allows; use `Inf` for no limit
+
+o NEW: `seed` argument for reproducible results in `simulate_sbm()`,
+  `simulate_smallworld()`, `add_population_error()`, `smallworldness()`,
+  `proxswap_lattice()`, and `weibull_parameters()`; the same seed gives the same
+  results and a seeded call does not change the R session's random number
+  stream. All random numbers come from the package's C generators (random
+  tie-breaking in edge weight assignment previously used R's random number
+  generator)
+
+o NEW: `network_fit()` returns class `"ggm_fit"` with `print()` and `summary()`
+  methods (the named numeric vector is unchanged, e.g., `fit["CFI"]`);
+  `print()`/`summary()` of simulated data report the realized and requested
+  negative edges, generation diagnostics, and (for large networks) summaries
+  instead of full matrices
+
+o FIX: negative `skew` reversed the sign of a variable's correlations with all
+  other variables (the transformation was negated); negative skew now reflects
+  the data, skews, and reflects back. The skew transformation is fitted once per
+  skew value on the standard normal distribution so that `skew` is the
+  population skew (it was fitted to each sample's own skew, which could loop
+  forever in small samples) and skewed variables are standardized with
+  population moments. `skew` is rounded to 0.05 as documented, and `skew_range`
+  draws one skew per variable (previously, a range with as many values as
+  variables was applied in order)
+
+o FIX: `simulate_sbm()` and `simulate_smallworld()` could loop forever when
+  `snr` (e.g., above 2) predicts Weibull parameters outside the empirical
+  bounds, and `simulate_smallworld()` when pruning could not reach a connected
+  graph; Weibull parameters are now drawn from the bootstrapped parameters
+  within the bounds (equivalent to the previous rejection sampling), an
+  informative error is given when none exist, and pruning is limited to
+  `max_iterations` attempts
+
+o FIX: invalid `diffusion_range` or `skew_range` values gave internal errors (or
+  were silently counted as rejected attempts); they are now checked with the
+  other inputs. `blocks`, `nodes`, and `categories` must be whole numbers, and
+  input checks no longer accept values slightly outside their range (values were
+  rounded to three decimals) or missing values
+
+o FIX: `add_population_error()` without `method` now gives the intended
+  "`method` must be specified" error; `tolerance` must be positive
+
+o CHANGE: after ridge conditioning, the Weibull parameters reported in
+  `parameters$weibull` are re-estimated by maximum likelihood from the
+  conditioned edge weights and re-checked against the empirical bounds (as
+  documented); small-world rewired edges are assigned a distance of `neighbors +
+  1` (as documented) and `simulate_smallworld()` returns named population
+  matrices
+
+o FIX: weighted `smallworldness()` treated larger weights as longer path lengths
+  and ignored weights in the clustering coefficient; weighted path lengths now
+  use inverse weights and clustering uses the weighted coefficient of Onnela et
+  al. (2005), following Muldoon et al. (2016). SWP and SWI are bounded to [0, 1]
+  as documented, self-loops are not counted as edges, simulated S uses the
+  average random-graph clustering and path length, analytical S returns `NA`
+  with a warning for an average degree of 1 or less, and multiple `method`
+  values give an error
+
+o FIX: `network_fit()` accepts data frames for `S`, checks its inputs, labels
+  confidence intervals such as 97.5% correctly, and computes p-values without
+  loss of precision
+
+o FIX: `proxswap_lattice()` failed for a single pair of nodes at a ring distance
+  and counted self-loops as edges; `weibull_parameters()` and `categorize()`
+  check their inputs (`categorize()` returns integers, as documented);
+  `simulate_smallworld()` no longer forces a negative edge for very small
+  `negative_proportion`
+
+o CHANGE: `add_population_error()` is faster: the target is found by searching
+  upward from no error instead of a 20-point grid, evaluations are memoized,
+  Cudeck-Browne error is scaled in closed form, decompositions are reused, and
+  the reported fit comes from the optimization's refit of the true network (the
+  same values as `network_fit()`); attempts continue until `fit_value` is
+  matched (to 1e-6) rather than stopping within `tolerance`
+
+o FIX: the normal random number generator used the same low bits for the
+  ziggurat strip and the value and was seeded with the clock only (parallel
+  workers could share streams); it now uses independent bits and the same
+  seeding as the uniform generator. Uniform draws are strictly between 0 and 1
+
+o CHANGE: {psych} is no longer a dependency (skewness is computed internally)
+
 o CHANGE: the default `fit_value` for `metric = "srmr"` in
   `add_population_error()` is 0.05 (previously 0.08), consistent with
   {latentFactoR}

@@ -2,6 +2,9 @@
 ^\.github$
 ^images$
 ^\.Rproj\.user$
-^Readme\.md$
+^README\.md$
 .gitignore
 LICENSE
+^src/.*\.o$
+^src/.*\.so$
+^src/.*\.dll$

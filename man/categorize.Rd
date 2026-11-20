@@ -17,7 +17,8 @@ Between 2 and 6 categories can be used with skew}
 
 \item{skew_value}{Numeric (length = 1).
 Value of skew.
-Ranges between -2 to 2 in increments of 0.05.
+Ranges between -2 to 2 in increments of 0.05 (values outside of this range
+give an error).
 Skews not in this sequence will be converted to
 the nearest value in this sequence.
 Defaults to \code{0} or no skew}

@@ -28,9 +28,7 @@ jobs:
 
     steps:
         
-      - uses: actions/checkout@v2
-      - uses: r-lib/actions/setup-tinytex@v2
-      - run: tlmgr --version
+      - uses: actions/checkout@v4
 
       - uses: r-lib/actions/setup-pandoc@v2
 

@@ -5,8 +5,8 @@
 #' block model (SBM) structure. Nodes are partitioned into communities, with
 #' edge density controlled separately within and between communities via a
 #' \code{blocks x blocks} density matrix. Absolute edge weights are drawn from
-#' a Weibull distribution whose parameters are predicted from the network size,
-#' sample size, and signal-to-noise ratio using a Seemingly Unrelated
+#' a Weibull distribution whose parameters are predicted from the network size
+#' and signal-to-noise ratio using a Seemingly Unrelated
 #' Regression (SUR) model fitted to 194 empirical psychometric networks
 #' (Huth et al., 2025). The resulting population partial correlation matrix is
 #' used to generate multivariate normal (or skewed) data.
@@ -16,10 +16,11 @@
 #' the remaining edges are shuffled randomly, the effective within-community
 #' advantage will generally exceed \code{1 - diffusion}; see Details.
 #'
-#' Parameters do not have default values (except \code{negative_proportion},
-#' \code{diffusion}, \code{target_condition}, \code{max_correlation}, and
-#' \code{max_iterations}) and must each be set. See Details and Examples to
-#' get started.
+#' Parameters do not have default values (except \code{snr},
+#' \code{negative_proportion}, \code{diffusion}, \code{diffusion_range},
+#' \code{skew}, \code{skew_range}, \code{target_condition},
+#' \code{max_correlation}, \code{max_iterations}, and \code{seed}) and must
+#' each be set. See Details and Examples to get started.
 #'
 #' @param nodes Numeric (length = 1 or \code{blocks}).
 #' Number of nodes per community block. Can be a single value applied to all
@@ -27,8 +28,7 @@
 #' individually. Minimum of three nodes per block. The total number of nodes
 #' (\code{sum(nodes)}) should be between 8 and 54 to remain within the range
 #' of the empirical networks used to fit the Weibull parameter model; values
-#' outside this range are accepted but will trigger extrapolation and may
-#' produce a warning from \code{\link{weibull_parameters}}.
+#' outside this range are accepted but extrapolate the model and give a warning.
 #'
 #' @param blocks Numeric (length = 1).
 #' Number of community blocks.
@@ -54,7 +54,9 @@
 #' edge weights, which is additionally governed by \code{nodes}
 #' via \code{\link{weibull_parameters}}. Empirically
 #' observed SNR values ranged from 0.648 to 1.712; values outside this range
-#' are accepted but will trigger a warning. Defaults to \code{1}.
+#' are accepted but will trigger a warning (an error is given when the
+#' predicted edge weight distribution cannot fall within the empirical
+#' bounds). Defaults to \code{1}.
 #'
 #' @param negative_proportion Numeric (length = 1).
 #' Proportion of between-community edges assigned a negative sign (inhibitory
@@ -101,8 +103,8 @@
 #'
 #' @param skew_range Numeric (length = 2).
 #' If provided, overrides \code{skew} by drawing a skew value independently
-#' and uniformly from this interval for each variable. Both values must be
-#' in \eqn{[-2, 2]}.
+#' for each variable from the values in this interval (in increments of 0.05).
+#' Both values must be in \eqn{[-2, 2]}.
 #'
 #' @param target_condition Numeric (length = 1).
 #' Target condition number (computed via \code{\link{kappa}} with
@@ -111,10 +113,13 @@
 #' \eqn{\lambda} that brings the condition number to this target is found via
 #' root-finding (\code{\link{uniroot}}), subject to a maximum shrinkage of
 #' approximately 23\% following Peeters et al. (2020). After conditioning,
-#' the Weibull bounds are re-verified on the updated edge weights; draws that
-#' fall outside the empirical bounds after conditioning are rejected. Lower
-#' values produce better-conditioned (more stable) matrices. Defaults to
-#' \code{30}. Values up to \code{100} are accepted but not recommended.
+#' the Weibull parameters are re-estimated by maximum likelihood from the
+#' conditioned edge weights and re-verified against the empirical bounds; draws
+#' that fall outside the bounds are rejected. Draws whose population
+#' correlation matrix has a condition number greater than
+#' \code{target_condition + 1} are rejected. Lower values produce
+#' better-conditioned (more stable) matrices. Defaults to \code{30}. Values up
+#' to \code{100} are accepted but not recommended.
 #'
 #' @param max_correlation Numeric (length = 1).
 #' Maximum allowed absolute pairwise correlation in the population correlation
@@ -127,6 +132,11 @@
 #' weights before stopping with an error. The error message reports a
 #' frequency table of rejection reasons to assist with diagnosing convergence
 #' failures. Defaults to \code{100}.
+#'
+#' @param seed Numeric (length = 1).
+#' Seed for reproducible results. The same \code{seed} gives the same results
+#' (and does not change the random number stream of the R session).
+#' Defaults to \code{NULL} (random seed)
 #'
 #' @details
 #' \strong{Constructing \code{density_matrix}}
@@ -233,7 +243,11 @@
 #'   \item \code{omega} --- Smallworldness omega statistic of the generated
 #'   network (Telesford et al., 2011). Values near zero indicate small-world
 #'   structure; negative values indicate lattice-like structure; positive
-#'   values indicate random-like structure (see \code{\link[psychNetwoRk]{smallworldness}})
+#'   values indicate random-like structure (see \code{\link[psychNetwoRk]{smallworldness}}).
+#'   Computed with \code{smallworldness(Omega, method = "omega")}, which uses
+#'   a degree-preserving lattice from \code{\link[psychNetwoRk]{proxswap_lattice}}
+#'   and 100 random reference graphs (unlike \code{simulate_smallworld}, which
+#'   uses the pruned lattice that the network was generated from)
 #'   \item \code{Q} --- Newman-Girvan modularity of the population network
 #'   (\code{Omega}) with respect to the block membership, computed via
 #'   \code{igraph::modularity} on absolute edge weights. Provides a summary
@@ -261,7 +275,7 @@
 #'   \item \code{iterations} --- Number of sampling attempts needed to find a
 #'   valid network (including graph structure and edge weight draws)
 #'   \item \code{rejections} --- Character vector of length
-#'   \code{max_iterations + 1} recording the rejection reason for each failed
+#'   \code{max_iterations} recording the rejection reason for each failed
 #'   attempt; entries for successful or unused iterations are empty strings.
 #'   Common reasons include disconnected graph structure, condition number
 #'   exceeding \code{target_condition}, maximum correlation exceeding
@@ -376,28 +390,26 @@ simulate_sbm <- function(
     negative_proportion, sample_size,
     skew = 0, skew_range = NULL,
     target_condition = 30, max_correlation = 0.80,
-    max_iterations = 100
+    max_iterations = 100, seed = NULL
 )
 {
 
+  # Set seed (reproducible results)
+  seed_token <- seed_start(seed)
+  on.exit(seed_end(seed_token), add = TRUE)
+
   # Check for missing negative proportion
+  # (empirical values, bounded to [0.083, 0.55])
   if(missing(negative_proportion)){
-
-    # Compute proportion of negative edges based on empirical values
-    negative_proportion <- pmin(
-      pmax(
-        0.34 + rnorm_ziggurat(1) * 0.086, # empirical mean +/- 1 SD
-        0.083 # empirical minimum
-      ), 0.55 # empirical maximum
-    )
-
+    negative_proportion <- default_negative_proportion(0.55)
   }
 
   # Check for input errors
   ## Returns updated nodes to ensure same length as blocks
   nodes <- simulate_sbm_errors(
     nodes, blocks, density_matrix,
-    snr, negative_proportion, sample_size, skew, diffusion,
+    snr, negative_proportion, sample_size, skew, skew_range,
+    diffusion, diffusion_range,
     target_condition, max_correlation, max_iterations
   )
 
@@ -416,83 +428,35 @@ simulate_sbm <- function(
   # Obtain lower triangle
   lower_triangle <- lower.tri(membership_matrix)
 
-  # Initialize iterations
-  iter <- 0
+  # Generate structure and weights (rejected attempts are retried)
+  loop <- simulation_loop(
+    attempt = function(){
 
-  # Initialize condition
-  search <- TRUE
-
-  # Collect rejections
-  rejections <- character(length = max_iterations + 1)
-
-  # Generation loop
-  while(search){
-
-    # Increase iterations
-    iter <- iter + 1
-
-    # Stop on greater than max iterations
-    if(iter > max_iterations){
-
-      # Collect rejections
-      rejection_table <- fast_table(rejections)
-
-      # Remove NULL
-      rejection_table <- rejection_table[names(rejection_table) != ""]
-
-      # Return error
-      stop(
-        paste0(
-          "Reached maximum iterations: Could not find weights that converge for the SBM structure. ",
-          "Resulting rejections were due to:\n\n",
-          paste0(names(rejection_table), " = ", rejection_table, collapse = "\n")
-        )
+      # Get block matrix
+      block_matrix <- generate_sbm(
+        membership_matrix, blocks, membership,
+        membership_matrix, density_matrix, lower_triangle
       )
 
-    }
+      # Check block matrix
+      if(!igraph::is_connected(convert2igraph(block_matrix))){
+        stop("Could not find structure where every node was connected.", call. = FALSE)
+      }
 
-    # Get block matrix
-    block_matrix <- generate_sbm(
-      membership_matrix, blocks, membership,
-      membership_matrix, density_matrix, lower_triangle
-    )
-
-    # Check block matrix
-    if(!igraph::is_connected(convert2igraph(block_matrix))){
-
-      # Add rejection reason
-      rejections[iter] <- "Could not find structure where every node was connected."
-
-      # Move to next iteration
-      next
-
-    }
-
-    # Try to get good weights
-    output <- try(
+      # Get weights
       sbm_weights(
         block_matrix, membership, membership_matrix,
         snr, total_nodes, negative_proportion,
         diffusion, diffusion_range, target_condition,
         max_correlation, lower_triangle
-      ), silent = TRUE
-    )
+      )
 
-    # Check for error
-    if(is(output, "try-error")){
-
-      # Add rejection reason
-      rejections[iter] <- trimws(strsplit(output[1], split = "\n")[[1]][2])
-
-      # Move to next iteration
-      next
-
-    }
-
-    # Update search
-    search <- FALSE
-
-  }
+    },
+    max_iterations = max_iterations, structure = "SBM"
+  )
+  output <- loop$output
+  iter <- loop$iterations
+  rejections <- loop$rejections
 
   # Generate data
   data_output <- simulate_data(
@@ -550,7 +514,8 @@ simulate_sbm <- function(
 # Updated 14.03.2026
 simulate_sbm_errors <- function(
     nodes, blocks, density_matrix,
-    snr, negative_proportion, sample_size, skew, diffusion,
+    snr, negative_proportion, sample_size, skew, skew_range,
+    diffusion, diffusion_range,
     target_condition, max_correlation, max_iterations
 )
 {
@@ -559,15 +524,28 @@ simulate_sbm_errors <- function(
   typeof_error(blocks, "numeric", "simulate_sbm")
   length_error(blocks, 1, "simulate_sbm")
   range_error(blocks, c(1, Inf), "simulate_sbm")
+  whole_number_error(blocks, "simulate_sbm")
 
   # Errors for 'nodes'
   typeof_error(nodes, "numeric", "simulate_sbm")
   length_error(nodes, c(1, blocks), "simulate_sbm")
   range_error(nodes, c(3, Inf), "simulate_sbm")
+  whole_number_error(nodes, "simulate_sbm")
 
   # Ensure 'nodes' is the length of blocks
   if(length(nodes) != blocks){
     nodes <- rep(nodes, blocks)
+  }
+
+  # Warn outside of the range of the empirical networks
+  if(sum(nodes) < 8 || sum(nodes) > 54){
+    warning(
+      paste0(
+        "The total number of nodes (", sum(nodes), ") is outside of the range of the ",
+        "empirical networks used to fit the Weibull parameter model (8-54); ",
+        "edge weights are extrapolated"
+      ), call. = FALSE
+    )
   }
 
   # Object error for 'density_matrix'
@@ -585,56 +563,27 @@ simulate_sbm_errors <- function(
 
   # Symmetric error for 'density_matrix'
   if(!is_symmetric(density_matrix)){
-    stop("`simulate_sbm` can only handle symmetric 'density_matrix' input.")
+    stop("`simulate_sbm` can only handle symmetric 'density_matrix' input.", call. = FALSE)
   }
-
-  # Error for 'snr'
-  typeof_error(snr, "numeric", "simulate_sbm")
-  length_error(snr, 1, "simulate_sbm")
-  range_error(snr, c(0.01, Inf), "simulate_sbm")
-
-  # Send warning if beyond bounds
-  if((snr < 0.64) | (snr > 1.72)){
-    warning(paste0(
-      "The signal-to-ratio specified (", round(snr, 2), ") is beyond ",
-      "the bounds of cataloged empirical data (0.64-1.72). "
-    ))
-  }
-
-  # Errors for 'negative_proportion'
-  typeof_error(negative_proportion, "numeric", "simulate_sbm")
-  length_error(negative_proportion, 1, "simulate_sbm")
-  range_error(negative_proportion, c(0, 1), "simulate_sbm")
-
-  # Errors for 'sample_size'
-  typeof_error(sample_size, "numeric", "simulate_sbm")
-  length_error(sample_size, 1, "simulate_sbm")
-  range_error(sample_size, c(1, Inf), "simulate_sbm")
-
-  # Errors for 'skew'
-  typeof_error(skew, "numeric", "simulate_sbm")
-  length_error(skew, c(1, sum(nodes)), "simulate_sbm")
-  range_error(skew, c(-2, 2), "simulate_sbm")
 
   # Errors for 'diffusion'
   typeof_error(diffusion, "numeric", "simulate_sbm")
   length_error(diffusion, 1, "simulate_sbm")
   range_error(diffusion, c(0, 1), "simulate_sbm")
 
-  # Errors for 'target_condition'
-  typeof_error(target_condition, "numeric", "simulate_sbm")
-  length_error(target_condition, 1, "simulate_sbm")
-  range_error(target_condition, c(1, 100), "simulate_sbm")
+  # Errors for 'diffusion_range'
+  if(!is.null(diffusion_range)){
+    typeof_error(diffusion_range, "numeric", "simulate_sbm")
+    length_error(diffusion_range, 2, "simulate_sbm")
+    range_error(diffusion_range, c(0, 1), "simulate_sbm")
+  }
 
-  # Errors for 'max_correlation'
-  typeof_error(max_correlation, "numeric", "simulate_sbm")
-  length_error(max_correlation, 1, "simulate_sbm")
-  range_error(max_correlation, c(0, 1), "simulate_sbm")
-
-  # Errors for 'max_iterations'
-  typeof_error(max_iterations, "numeric", "simulate_sbm")
-  length_error(max_iterations, 1, "simulate_sbm")
-  range_error(max_iterations, c(1, Inf), "simulate_sbm")
+  # Shared errors
+  check_simulation_inputs(
+    sum(nodes), snr, negative_proportion, 1, sample_size,
+    skew, skew_range, target_condition, max_correlation, max_iterations,
+    "simulate_sbm"
+  )
 
   # Return updated nodes
   return(nodes)
@@ -725,11 +674,8 @@ sbm_weights <- function(
 )
 {
 
-  # Check for diffusion range
+  # Check for diffusion range (validated in `simulate_sbm_errors`)
   if(!is.null(diffusion_range)){
-    typeof_error(diffusion_range, "numeric") # object type error
-    length_error(diffusion_range, 2) # object length error
-    range_error(diffusion_range, c(0, 1)) # object range error
     diffusion <- diffusion_range
   }else{
     diffusion <- c(diffusion, diffusion)
@@ -836,65 +782,16 @@ sbm_weights <- function(
   network <- block_matrix + t(block_matrix)
 
   # Add names to network
-  names(membership) <- row.names(network) <- colnames(network) <- paste0(
-    "V", format_integer(seq_len(total_nodes), digits(total_nodes) - 1)
+  names(membership) <- row.names(network) <- colnames(network) <- node_names(total_nodes)
+
+  # Population correlations, conditioning, and validity checks
+  output <- condition_and_validate(
+    network, attr(edges, "params"), target_condition, max_correlation, lower_triangle
   )
-
-  # Get population values
-  R <- silent_call(pcor2cor(network))
-
-  # Set condition and lambda
-  lambda <- NA
-
-  # Check for positive definite
-  if(anyNA(R) || !is_positive_definite(R)){
-
-    # Try to condition network
-    output <- try(condition_network(network, target_condition), silent = TRUE)
-
-    # Check for whether correlation matrix is conditioned
-    if(is(output, "try-error")){
-      stop("Ill-conditioned")
-    }
-
-    # Store outputs
-    lambda <- output$lambda
-
-    # Update network and correlations
-    P <- cor2pcor(output$R)
-    P[network == 0] <- 0
-    network <- P
-    R <- pcor2cor(network)
-
-    # Check for positive definite again
-    if(anyNA(R) || !is_positive_definite(R)){
-      stop("Not positive definite")
-    }
-
-  }
-
-  # Check for condition
-  condition <- fast_kappa(R)
-  if(condition > (target_condition + 1)){
-    stop("Condition number exceeds target")
-  }
-
-  # Check for maximum correlation
-  if(max(abs(R[lower_triangle])) > max_correlation){
-    stop("Max correlation exceeds target")
-  }
 
   # Return results
   return(
-    list(
-      R = R,
-      network = network,
-      membership = membership,
-      params = attr(edges, "params"),
-      diffusion = diffusion,
-      lambda = lambda,
-      condition = condition
-    )
+    c(output, list(membership = membership, diffusion = diffusion))
   )
 
 }

@@ -38,13 +38,20 @@
 #' retained; the one with the highest clustering coefficient is returned.
 #' Defaults to \code{100}.
 #'
+#' @param seed Numeric (length = 1).
+#' Seed for reproducible results. The same \code{seed} gives the same results
+#' (and does not change the random number stream of the R session).
+#' Defaults to \code{NULL} (random seed)
+#'
 #' @return A square symmetric matrix of the same dimension as \code{network},
 #' with row and column names preserved, representing the resulting ring
 #' lattice. When \code{weighted = FALSE} (default), entries are binary integers
 #' (\code{0L}/\code{1L}); when \code{weighted = TRUE}, entries contain the
 #' reassigned edge weights from \code{network} with original signs preserved.
 #' The average clustering coefficient of the returned graph is attached as the
-#' attribute \code{"CC"} and can be retrieved with \code{attr(result, "CC")}.
+#' attribute \code{"CC"} and can be retrieved with \code{attr(result, "CC")}
+#' (when \code{weighted = TRUE}, the weighted clustering coefficient of
+#' Onnela et al., 2005, with weights normalized by the largest weight).
 #' When the empirical fallback is triggered (see Details), \code{"CC"} reflects
 #' the empirical network's clustering coefficient rather than a lattice's.
 #'
@@ -69,7 +76,7 @@
 #'
 #' \strong{Swap repair.} If any degree deficit remains after the proximity
 #' pass, the highest-deficit node \eqn{i} is connected to its nearest
-#' available ring neighbour, scanning clockwise and counter-clockwise
+#' available ring neighbor, scanning clockwise and counter-clockwise
 #' positions in interleaved distance order. When no direct partner with
 #' remaining budget exists, an edge swap is performed: a nearby unconnected
 #' node \eqn{j} is found, one of \eqn{j}'s existing edges to \eqn{k} is
@@ -79,7 +86,7 @@
 #' phase is implemented in compiled C via \code{swapping_pass_c}.
 #'
 #' \strong{Weight assignment.} When \code{weighted = TRUE}, edge weights are
-#' reassigned after the binary topology is finalised. The observed weights are
+#' reassigned after the binary topology is finalized. The observed weights are
 #' sorted by \emph{absolute value} in descending order (largest magnitude first)
 #' and mapped onto lattice edges ranked by ascending ring distance (i.e.,
 #' \eqn{d_{ij} = \min(|i - j|,\, n - |i - j|)}), so that shorter (more local)
@@ -132,8 +139,30 @@
 #'
 # Proximity-swap lattice construction ----
 # Updated 26.03.2026
-proxswap_lattice <- function(network, weighted = FALSE, shuffles = 100)
+proxswap_lattice <- function(network, weighted = FALSE, shuffles = 100, seed = NULL)
 {
+
+  # Set seed (reproducible results)
+  seed_token <- seed_start(seed)
+  on.exit(seed_end(seed_token), add = TRUE)
+
+  # Check inputs
+  object_error(network, c("matrix", "data.frame", "tibble"), "proxswap_lattice")
+  network <- as.matrix(network)
+  if(!is.numeric(network) && !is.logical(network)){
+    stop("`network` must be a numeric matrix", call. = FALSE)
+  }
+  if(!is_symmetric(network)){
+    stop("`network` must be a square, symmetric matrix", call. = FALSE)
+  }
+  typeof_error(weighted, "logical", "proxswap_lattice")
+  length_error(weighted, 1, "proxswap_lattice")
+  typeof_error(shuffles, "numeric", "proxswap_lattice")
+  length_error(shuffles, 1, "proxswap_lattice")
+  range_error(shuffles, c(1, Inf), "proxswap_lattice")
+
+  # Zero diagonal (self-loops are not edges)
+  diag(network) <- 0
 
   # Automatically construct adjacency
   A <- network != 0
@@ -150,8 +179,7 @@ proxswap_lattice <- function(network, weighted = FALSE, shuffles = 100)
 
   # Set up distance matrix
   node_sequence <- seq_len(nodes)
-  distance_matrix <- abs(outer(node_sequence, node_sequence, "-"))
-  distance_matrix <- pmin(distance_matrix, nodes - distance_matrix)
+  distance_matrix <- ring_distance(nodes)
 
   # Pre-compute unique node pairs at each ring distance, and flatten them
   # into the parallel vectors `proximity_pass` needs once here -- `pairs`
@@ -163,7 +191,7 @@ proxswap_lattice <- function(network, weighted = FALSE, shuffles = 100)
   pair_counts <- lengths(lapply(pairs, function(p) p[, "row"]))
 
   # Compute empirical clustering coefficient for fallback check
-  empirical_CC <- igraph::transitivity(convert2igraph(network), type = "average")
+  empirical_CC <- graph_clustering(network, "average", weighted)
 
   # Initialize best result trackers
   best_swap <- best_ring <- NULL
@@ -205,17 +233,11 @@ proxswap_lattice <- function(network, weighted = FALSE, shuffles = 100)
 
     # Check for weighted
     if(weighted){
-
-      # Get weights
       result$ring <- assign_weights(network, result$ring, distance_matrix)
-
-      # Update ring to {igraph}
-      iring <- convert2igraph(result$ring)
-
     }
 
     # With success, compute clustering coefficient for this pass
-    pass_CC <- igraph::transitivity(iring, type = "average")
+    pass_CC <- graph_clustering(result$ring, "average", weighted)
 
     # Update best pass
     if(pass_CC > best_CC){
@@ -289,8 +311,8 @@ build_pairs <- function(distance_matrix)
       # Obtain pairs
       pairs <- which(distance_matrix == i, arr.ind = TRUE)
 
-      # Return pairs
-      return(pairs[pairs[,"row"] < pairs[,"col"],])
+      # Return pairs (keep matrix with a single pair)
+      return(pairs[pairs[,"row"] < pairs[,"col"], , drop = FALSE])
 
     }
     )
@@ -545,7 +567,7 @@ assign_weights <- function(network, A, distance_matrix)
 
   # Set weights order
   # Follows: Muldoon, Bridgeford, & Bassett's (2016) implementation
-  weight_order <- rank(distance_matrix[lower_triangle][A_nonzero], ties.method = "random")
+  weight_order <- rank_random(distance_matrix[lower_triangle][A_nonzero])
   A[lower_triangle][A_nonzero] <- weights[weight_order]
   A[!lower_triangle] <- 0
   A <- A + t(A) # make symmetric

@@ -25,9 +25,10 @@
 #' population (approximately 8.3 billion). At this size, the fit indices are
 #' within about \eqn{10^{-8}} of their large-sample limits
 #'
-#' Each optimization attempt uses new random starting values or random draws
-#' of the error (up to \code{max_iterations}) and the attempt closest to
-#' \code{fit_value} is returned. If \code{fit_value} cannot be reached within
+#' Each optimization attempt uses new random draws of the error. Attempts
+#' continue (up to \code{max_iterations}) until \code{fit_value} is matched
+#' (to within \eqn{10^{-6}}) and the attempt closest to \code{fit_value} is
+#' returned. If \code{fit_value} cannot be reached within
 #' \code{tolerance} (e.g., because the target requires more error than can be
 #' added while remaining positive definite), a warning is given and the closest
 #' solution is used
@@ -103,8 +104,9 @@
 #'
 #' @param tolerance Numeric (length = 1).
 #' Maximum absolute difference between the target \code{fit_value} and the
-#' \code{metric} of the population correlation matrix with error. Ensures that
-#' the appropriate amount of population error was added.
+#' \code{metric} of the population correlation matrix with error that is
+#' accepted without a warning (must be positive). Ensures that the appropriate
+#' amount of population error was added.
 #' Defaults to \code{0.01}
 #'
 #' @param max_iterations Numeric (length = 1).
@@ -112,6 +114,11 @@
 #' draws of the error) to reach the target \code{fit_value} within the specified
 #' \code{tolerance}.
 #' Defaults to \code{10}
+#'
+#' @param seed Numeric (length = 1).
+#' Seed for reproducible results. The same \code{seed} gives the same results
+#' (and does not change the random number stream of the R session).
+#' Defaults to \code{NULL} (random seed)
 #'
 #' @param control List.
 #' Method-specific options. Options that do not apply to \code{method} are
@@ -162,6 +169,17 @@
 #' \item \code{omitted} --- Proportion of the zero edges in the true network
 #' that are omitted edges for \code{method = "hb"}. At least one edge is always
 #' omitted. Defaults to \code{0.10}
+#'
+#' \item \code{max_condition} --- Largest condition number of the population
+#' correlation matrix with error for \code{method = "hb"}. The estimation of
+#' the true network (GLASSO) becomes very slow for nearly singular matrices,
+#' which occur at the largest errors the omitted edges can add. In
+#' simulations across a wide range of networks, a limit of \code{1000}
+#' keeps nearly all of the reachable misfit (CFI, TLI, and SRMR reach their
+#' worst fit well before the limit; RMSEA loses about 2\% on average) and
+#' avoids fits that take many seconds. If \code{fit_value} requires more error
+#' than the limit allows, a warning is given and the closest solution is used.
+#' Use \code{Inf} for no limit. Defaults to \code{1000}
 #'
 #' }
 #'
@@ -314,14 +332,21 @@ add_population_error <- function(
     metric = c("cfi", "tli", "rmsea", "srmr"),
     fit_value = NULL,
     tolerance = 0.01, max_iterations = 10,
-    control = list()
+    control = list(), seed = NULL
 )
 {
 
+  # Set seed (reproducible results)
+  seed_token <- seed_start(seed)
+  on.exit(seed_end(seed_token), add = TRUE)
+
   # Check inputs
+  # (`missing()` is evaluated here: it does not carry over to a function
+  # that receives an argument with a default)
   inputs <- add_population_error_errors(
     ggm_object, method, metric, fit_value,
-    tolerance, max_iterations, control
+    tolerance, max_iterations, control,
+    method_missing = missing(method)
   )
   method <- inputs$method
   metric <- inputs$metric
@@ -352,7 +377,9 @@ add_population_error <- function(
   df <- length(free_cells)
 
   # Original population correlation matrix as the reference
-  reference <- reference_model(R)
+  R_chol <- chol(R)
+  reference <- reference_model(R, R_chol)
+  inverse_chol <- backsolve(R_chol, diag(nodes))
 
   # Initialize best solution
   best <- NULL
@@ -366,23 +393,24 @@ add_population_error <- function(
       method,
       "cb" = CB_optimize(
         metric, target, reference, free_cells,
-        nodes, df, tolerance = tolerance
+        nodes, df, tolerance = tolerance, inverse_chol = inverse_chol
       ),
       "tkl" = TKL_optimize(
         metric, target, R, network, nodes, df,
         control$minor_factors, control$decay
       ),
       "wb" = WB_optimize(
-        metric, target, R, network, nodes, df
+        metric, target, R, network, nodes, df, reference = reference
       ),
       "hb" = HB_optimize(
         metric, target, R, network, nodes, df,
-        free_cells, control$omitted
+        free_cells, control$omitted, reference = reference,
+        max_condition = control$max_condition
       )
     )
 
     # Check for invalid fit
-    if(!solution$valid){
+    if(!isTRUE(solution$valid)){
       next
     }
 
@@ -398,8 +426,10 @@ add_population_error <- function(
 
     }
 
-    # Check for convergence
-    if(best_difference <= tolerance){
+    # Check for an exact solution (target is matched)
+    # (attempts continue past `tolerance` until the target is matched so that
+    # the achieved fit is as close to `fit_value` as the error allows)
+    if(best_difference <= 1e-06){
       break
     }
 
@@ -433,15 +463,29 @@ add_population_error <- function(
         "There were issues converging to the target ", metric, " = ", target,
         " within `tolerance` = ", tolerance, ". \n\n",
         "Using the solution with the closest ", metric, " = ",
-        round(best$fit[[metric]], 4), "."
+        round(best$fit[[metric]], 4), ".",
+        swiftelse(
+          isTRUE(best$fit$capped),
+          paste0(
+            "\n\nThe search range was shortened by `control$max_condition` = ",
+            control$max_condition, " (largest condition number of the ",
+            "population correlation matrix with error), so a larger error may ",
+            "reach the target. Increase it (or use `Inf`) to allow larger errors; ",
+            "estimation is slower for larger values"
+                    ), ""
+        )
       ), call. = FALSE
     )
 
   }
 
-  # Refit the known graph to obtain the achieved fit
-  # (also verifies whether the error is orthogonal to the network)
-  known <- known_graph(R_population, network)
+  # Known graph fit to the population correlation matrix with error
+  # (from the optimization; for Cudeck and Browne, the known graph is fit once
+  # here and verifies that the error is orthogonal to the network)
+  known <- best$fit$model
+  if(is.null(known)){
+    known <- known_graph(R_population, network)
+  }
   if(!known$converged){
     warning(
       paste0(
@@ -451,29 +495,12 @@ add_population_error <- function(
     )
   }
   R_difference <- max(abs(known$W - R))
-  # (population-level fit uses the same sample size as the optimization)
-  fit <- try(
-    suppressWarnings(
-      network_fit(known$network, n = population_size, S = R_population, ci = NULL)
-    ),
-    silent = TRUE
-  )
 
-  # Obtain fit indices and discrepancy
+  # Fit indices and discrepancy (population level; the same values as
+  # `network_fit` of the known graph at the population size)
   fit_names <- c("CFI", "TLI", "RMSEA", "SRMR")
-  if(is(fit, "try-error") || any(!is.finite(fit[fit_names]))){
-
-    # Use fit from the optimization
-    fit_vector <- unlist(best$fit[fit_names])
-    delta <- best$fit$discrepancy
-
-  }else{
-
-    # Use fit from the known graph
-    fit_vector <- fit[fit_names]
-    delta <- unname(fit[["chisq"]] / population_size)
-
-  }
+  fit_vector <- unlist(best$fit[fit_names])
+  delta <- best$fit$discrepancy
 
   # Generate data
   data_output <- simulate_data(
@@ -487,8 +514,7 @@ add_population_error <- function(
 
   # Network with error (partial correlations of the population correlation
   # matrix with error; saturated in general)
-  Omega_error <- -cov2cor(chol2inv(chol(R_population)))
-  diag(Omega_error) <- 0
+  Omega_error <- cor2pcor(R_population)
   dimnames(Omega_error) <- dimnames(R)
 
   # Update population
@@ -535,7 +561,7 @@ add_population_error <- function(
 # Updated 04.11.2026
 add_population_error_errors <- function(
     ggm_object, method, metric, fit_value,
-    tolerance, max_iterations, control
+    tolerance, max_iterations, control, method_missing = FALSE
 )
 {
 
@@ -572,7 +598,7 @@ add_population_error_errors <- function(
   }
 
   # Check for method (no default)
-  if(missing(method) || is.null(method)){
+  if(method_missing || is.null(method)){
     stop(
       paste0(
         "`method` must be specified. ",
@@ -632,6 +658,9 @@ add_population_error_errors <- function(
   # Check tolerance and maximum iterations
   typeof_error(tolerance, c("integer", "double"), "add_population_error")
   length_error(tolerance, 1, "add_population_error")
+  if(!is.finite(tolerance) || tolerance <= 0){
+    stop("`tolerance` must be a positive number", call. = FALSE)
+  }
   typeof_error(max_iterations, c("integer", "double"), "add_population_error")
   length_error(max_iterations, 1, "add_population_error")
   range_error(max_iterations, c(1, Inf), "add_population_error")
@@ -644,7 +673,7 @@ add_population_error_errors <- function(
   # Set control defaults
   control_defaults <- list(
     minor_factors = max(50, 2 * ncol(ggm_object$population$R)),
-    decay = 0.30, omitted = 0.10
+    decay = 0.30, omitted = 0.10, max_condition = 1000
   )
 
   # Check for unknown options
@@ -671,6 +700,7 @@ add_population_error_errors <- function(
   range_error(control$minor_factors, c(1, Inf), "add_population_error")
   range_error(control$decay, c(0, 1), "add_population_error")
   range_error(control$omitted, c(0, 1), "add_population_error")
+  range_error(control$max_condition, c(1, Inf), "add_population_error")
 
   # Return inputs
   return(

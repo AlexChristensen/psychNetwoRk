@@ -4,7 +4,6 @@
 
 // Declare the C functions you want to make available to R here
 extern SEXP r_ziggurat(SEXP n, SEXP r_seed);
-extern SEXP r_xoshiro_seeds(SEXP n, SEXP r_seed);
 extern SEXP r_xoshiro_uniform(SEXP n, SEXP r_seed);
 extern SEXP r_xoshiro_shuffle(SEXP r_vector, SEXP r_seed);
 extern SEXP r_xoshiro_weighted_shuffle(SEXP r_vector, SEXP r_prob, SEXP r_seed);
@@ -24,11 +23,6 @@ static const R_CallMethodDef CallEntries[] = {
     {
         "r_xoshiro_uniform",
         (DL_FUNC)&r_xoshiro_uniform,
-         2
-    },
-    {
-        "r_xoshiro_seeds",
-        (DL_FUNC)&r_xoshiro_seeds,
          2
     },
     {

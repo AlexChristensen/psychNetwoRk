@@ -17,7 +17,8 @@ simulate_sbm(
   skew_range = NULL,
   target_condition = 30,
   max_correlation = 0.8,
-  max_iterations = 100
+  max_iterations = 100,
+  seed = NULL
 )
 }
 \arguments{
@@ -27,8 +28,7 @@ blocks, or a vector of length \code{blocks} specifying each block's size
 individually. Minimum of three nodes per block. The total number of nodes
 (\code{sum(nodes)}) should be between 8 and 54 to remain within the range
 of the empirical networks used to fit the Weibull parameter model; values
-outside this range are accepted but will trigger extrapolation and may
-produce a warning from \code{\link{weibull_parameters}}.}
+outside this range are accepted but extrapolate the model and give a warning.}
 
 \item{blocks}{Numeric (length = 1).
 Number of community blocks.}
@@ -54,7 +54,9 @@ give SNR = 1), so SNR alone does not determine the absolute magnitude of
 edge weights, which is additionally governed by \code{nodes}
 via \code{\link{weibull_parameters}}. Empirically
 observed SNR values ranged from 0.648 to 1.712; values outside this range
-are accepted but will trigger a warning. Defaults to \code{1}.}
+are accepted but will trigger a warning (an error is given when the
+predicted edge weight distribution cannot fall within the empirical
+bounds). Defaults to \code{1}.}
 
 \item{diffusion}{Numeric (length = 1).
 Controls the minimum proportion of the top-ranked edges (by absolute
@@ -101,8 +103,8 @@ in \eqn{[-2, 2]}. Defaults to \code{0} (no skew).}
 
 \item{skew_range}{Numeric (length = 2).
 If provided, overrides \code{skew} by drawing a skew value independently
-and uniformly from this interval for each variable. Both values must be
-in \eqn{[-2, 2]}.}
+for each variable from the values in this interval (in increments of 0.05).
+Both values must be in \eqn{[-2, 2]}.}
 
 \item{target_condition}{Numeric (length = 1).
 Target condition number (computed via \code{\link{kappa}} with
@@ -111,10 +113,13 @@ a positive definite precision matrix. The smallest ridge penalty
 \eqn{\lambda} that brings the condition number to this target is found via
 root-finding (\code{\link{uniroot}}), subject to a maximum shrinkage of
 approximately 23\% following Peeters et al. (2020). After conditioning,
-the Weibull bounds are re-verified on the updated edge weights; draws that
-fall outside the empirical bounds after conditioning are rejected. Lower
-values produce better-conditioned (more stable) matrices. Defaults to
-\code{30}. Values up to \code{100} are accepted but not recommended.}
+the Weibull parameters are re-estimated by maximum likelihood from the
+conditioned edge weights and re-verified against the empirical bounds; draws
+that fall outside the bounds are rejected. Draws whose population
+correlation matrix has a condition number greater than
+\code{target_condition + 1} are rejected. Lower values produce
+better-conditioned (more stable) matrices. Defaults to \code{30}. Values up
+to \code{100} are accepted but not recommended.}
 
 \item{max_correlation}{Numeric (length = 1).
 Maximum allowed absolute pairwise correlation in the population correlation
@@ -127,6 +132,11 @@ Maximum number of attempts to find a connected network with valid edge
 weights before stopping with an error. The error message reports a
 frequency table of rejection reasons to assist with diagnosing convergence
 failures. Defaults to \code{100}.}
+
+\item{seed}{Numeric (length = 1).
+Seed for reproducible results. The same \code{seed} gives the same results
+(and does not change the random number stream of the R session).
+Defaults to \code{NULL} (random seed)}
 }
 \value{
 A named list of class \code{"ggm_simulate"} with four elements
@@ -167,7 +177,11 @@ A list of input, derived, and estimated parameters:
   \item \code{omega} --- Smallworldness omega statistic of the generated
   network (Telesford et al., 2011). Values near zero indicate small-world
   structure; negative values indicate lattice-like structure; positive
-  values indicate random-like structure (see \code{\link[psychNetwoRk]{smallworldness}})
+  values indicate random-like structure (see \code{\link[psychNetwoRk]{smallworldness}}).
+  Computed with \code{smallworldness(Omega, method = "omega")}, which uses
+  a degree-preserving lattice from \code{\link[psychNetwoRk]{proxswap_lattice}}
+  and 100 random reference graphs (unlike \code{simulate_smallworld}, which
+  uses the pruned lattice that the network was generated from)
   \item \code{Q} --- Newman-Girvan modularity of the population network
   (\code{Omega}) with respect to the block membership, computed via
   \code{igraph::modularity} on absolute edge weights. Provides a summary
@@ -195,7 +209,7 @@ Iteration and conditioning diagnostics:
   \item \code{iterations} --- Number of sampling attempts needed to find a
   valid network (including graph structure and edge weight draws)
   \item \code{rejections} --- Character vector of length
-  \code{max_iterations + 1} recording the rejection reason for each failed
+  \code{max_iterations} recording the rejection reason for each failed
   attempt; entries for successful or unused iterations are empty strings.
   Common reasons include disconnected graph structure, condition number
   exceeding \code{target_condition}, maximum correlation exceeding
@@ -215,8 +229,8 @@ Simulates data from a Gaussian Graphical Model (GGM) with a stochastic
 block model (SBM) structure. Nodes are partitioned into communities, with
 edge density controlled separately within and between communities via a
 \code{blocks x blocks} density matrix. Absolute edge weights are drawn from
-a Weibull distribution whose parameters are predicted from the network size,
-sample size, and signal-to-noise ratio using a Seemingly Unrelated
+a Weibull distribution whose parameters are predicted from the network size
+and signal-to-noise ratio using a Seemingly Unrelated
 Regression (SUR) model fitted to 194 empirical psychometric networks
 (Huth et al., 2025). The resulting population partial correlation matrix is
 used to generate multivariate normal (or skewed) data.
@@ -226,10 +240,11 @@ strongest edges that are reserved for within-community positions. Because
 the remaining edges are shuffled randomly, the effective within-community
 advantage will generally exceed \code{1 - diffusion}; see Details.
 
-Parameters do not have default values (except \code{negative_proportion},
-\code{diffusion}, \code{target_condition}, \code{max_correlation}, and
-\code{max_iterations}) and must each be set. See Details and Examples to
-get started.
+Parameters do not have default values (except \code{snr},
+\code{negative_proportion}, \code{diffusion}, \code{diffusion_range},
+\code{skew}, \code{skew_range}, \code{target_condition},
+\code{max_correlation}, \code{max_iterations}, and \code{seed}) and must
+each be set. See Details and Examples to get started.
 }
 \details{
 \strong{Constructing \code{density_matrix}}

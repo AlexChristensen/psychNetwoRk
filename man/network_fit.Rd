@@ -15,14 +15,17 @@ Sample size}
 
 \item{S}{Matrix or data frame.
 A p by p square zero-order correlation matrix corresponding
-with the input \code{network}}
+with the input \code{network} (must be positive definite)}
 
 \item{ci}{Numeric (length = 1).
-Confidence interval for RMSEA.
+Confidence interval for RMSEA (between 0 and 1), or \code{NULL} to skip
+the confidence interval.
 Defaults to \code{0.95}}
 }
 \value{
-A named numeric vector of traditional and likelihood-based fit
+A named numeric vector (class \code{"ggm_fit"}, with \code{print}
+and \code{summary} methods; indexing such as \code{fit["CFI"]} returns plain
+numbers) of traditional and likelihood-based fit
 indices. The vector always contains the following elements:
 
 \describe{
@@ -45,8 +48,9 @@ fit; values \eqn{\leq} 0.08 indicate acceptable fit}
 
 \item{\code{RMSEA.XX.lower}, \code{RMSEA.XX.upper}}{Lower and upper
 bounds of the \code{ci}-level confidence interval for RMSEA, where
-\code{XX} is the integer percentage (e.g., \code{RMSEA.95.lower} and
-\code{RMSEA.95.upper} for a 95\% CI)}
+\code{XX} is the percentage (e.g., \code{RMSEA.95.lower} and
+\code{RMSEA.95.upper} for a 95\% CI and \code{RMSEA.97.5.lower} for a
+97.5\% CI)}
 
 \item{\code{RMSEA.p.value}}{p-value for the one-sided test of close fit
 (H0: RMSEA \eqn{\leq} 0.05)}

@@ -14,7 +14,8 @@
 #'
 #' @param skew_value Numeric (length = 1).
 #' Value of skew.
-#' Ranges between -2 to 2 in increments of 0.05.
+#' Ranges between -2 to 2 in increments of 0.05 (values outside of this range
+#' give an error).
 #' Skews not in this sequence will be converted to
 #' the nearest value in this sequence.
 #' Defaults to \code{0} or no skew
@@ -74,6 +75,16 @@
 categorize <- function(data, categories, skew_value = 0)
 {
 
+  # Check inputs
+  typeof_error(data, "numeric", "categorize")
+  typeof_error(categories, "numeric", "categorize")
+  length_error(categories, 1, "categorize")
+  range_error(categories, c(2, Inf), "categorize")
+  whole_number_error(categories, "categorize")
+  typeof_error(skew_value, "numeric", "categorize")
+  length_error(skew_value, 1, "categorize")
+  range_error(skew_value, c(-2, 2), "categorize")
+
   # Possible skew values
   possible_skews <- seq(-2, 2, 0.05)
 
@@ -102,7 +113,7 @@ categorize <- function(data, categories, skew_value = 0)
   if(categories > 6){
 
     # Make categorical using `cut` (skew will be zero)
-    skewed_data <- as.numeric(cut(data, breaks = categories))
+    skewed_data <- as.integer(cut(data, breaks = categories))
 
   }else{
 
@@ -141,7 +152,7 @@ categorize <- function(data, categories, skew_value = 0)
 
   }
 
-  # Return categorized data
-  return(skewed_data)
+  # Return categorized data (integer categories)
+  return(as.integer(skewed_data))
 
 }
