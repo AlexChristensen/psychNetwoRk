@@ -1,4 +1,4 @@
-## Version 0.1.0
+Version 0.1.0
 
 o CHANGE: the default `fit_value` for `metric = "srmr"` in
   `add_population_error()` is 0.05 (previously 0.08), consistent with
