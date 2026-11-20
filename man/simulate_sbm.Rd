@@ -9,7 +9,7 @@ simulate_sbm(
   blocks,
   density_matrix,
   snr = 1,
-  diffusion = 0.3,
+  diffusion = 0,
   diffusion_range = NULL,
   negative_proportion,
   sample_size,
@@ -68,7 +68,7 @@ will on average exceed \code{1 - diffusion}. Lower values of
 \code{diffusion} (e.g., \code{0.10}) therefore produce stronger community
 contrast than higher values (e.g., \code{0.90}), but \code{diffusion}
 should be interpreted as a floor on within-community weight concentration,
-not an exact control. Defaults to \code{0.30}. Must be between 0 and 1.}
+not an exact control. Defaults to \code{0}. Must be between 0 and 1.}
 
 \item{diffusion_range}{Numeric (length = 2).
 If provided, overrides \code{diffusion} by drawing the diffusion proportion

@@ -1,5 +1,15 @@
 ## Version 0.1.0
 
+o CHANGE: `population$P` from `add_population_error()` has been replaced by
+  `population$Omega_error` (identical values: the saturated network with error)
+
+o CHANGE: SRMR now follows {lavaan} (lower triangle including the diagonal) in
+  `network_fit()` and `add_population_error()`
+
+o FIX: `add_population_error()` treats non-converged constrained maximum
+  likelihood refits as invalid, and the Wu and Browne (2015) method no longer
+  rescales draws (draws with errors outside of -1 to 1 are infeasible)
+
 o CHANGE: `weibull_parameters()` no longer uses sample size (`scaling`) as a
   predictor; the `sample_size` argument has been removed and both Weibull
   equations are now predicted from `snr` and `nodes` only. `sample_size` in

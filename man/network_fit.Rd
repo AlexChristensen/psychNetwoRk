@@ -60,10 +60,9 @@ acceptable fit}
 for severely misspecified models}
 
 \item{\code{SRMR}}{Standardized root mean residual: the root mean squared
-difference between the off-diagonal elements of the model-implied and
-observed correlation matrices (the diagonal is excluded, so this will be
-larger than the \pkg{lavaan} value, which includes the diagonal).
-Values \eqn{\leq} 0.08 indicate acceptable fit}
+difference between the lower triangle elements (including the diagonal) of
+the model-implied and observed correlation matrices, following
+\pkg{lavaan}. Values \eqn{\leq} 0.08 indicate acceptable fit}
 
 \item{\code{logLik}}{Gaussian log-likelihood of the model-implied
 correlation matrix, assuming zero mean structure (means are not

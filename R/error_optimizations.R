@@ -55,7 +55,7 @@ reference_model <- function(R)
 
 #' @noRd
 # Fit indices of a model-implied matrix to a population matrix
-# Updated 04.11.2026
+# Updated 19.11.2026
 fit_indices <- function(R_population, reference, df, n = population_size)
 {
 
@@ -97,9 +97,10 @@ fit_indices <- function(R_population, reference, df, n = population_size)
     return(list(valid = FALSE))
   }
 
-  # Standardized root mean square residual (off-diagonal lower triangle only)
+  # Standardized root mean square residual (lower triangle including the
+  # diagonal, p * (p + 1) / 2 unique elements; same as {lavaan} for correlations)
   residual <- R_population - reference$R
-  SRMR <- sqrt(mean(residual[lower.tri(residual)]^2))
+  SRMR <- sqrt(mean(residual[lower.tri(residual, diag = TRUE)]^2))
 
   # Return fit
   return(
@@ -157,7 +158,7 @@ CB_error_cost <- function(error_vector, metric, target, reference, free_cells, n
 
 #' @noRd
 # Cudeck and Browne (1992) gradient function
-# Updated 04.11.2026
+# Updated 19.11.2026
 CB_error_gradient <- function(error_vector, metric, target, reference, free_cells, nodes, df, n = population_size)
 {
 
@@ -220,7 +221,7 @@ CB_error_gradient <- function(error_vector, metric, target, reference, free_cell
         matrix(0, nrow = nodes, ncol = nodes)
       }else{
         (fit$R_population - reference$R) /
-          (fit$SRMR * nodes * (nodes - 1) / 2)
+          (fit$SRMR * nodes * (nodes + 1) / 2)
       }
 
     }
@@ -319,15 +320,16 @@ CB_optimize <- function(
 
 #' @noRd
 # Fit indices of the known graph (constrained maximum likelihood)
-# Updated 04.11.2026
+# Updated 19.11.2026
 refit_indices <- function(R_population, network, df, n = population_size)
 {
 
   # Obtain known graph
   known <- try(known_graph(R_population, network), silent = TRUE)
 
-  # Check for errors
-  if(is(known, "try-error")){
+  # Check for errors and non-convergence
+  # (a non-converged solution overstates misfit)
+  if(is(known, "try-error") || !isTRUE(known$converged)){
     return(list(valid = FALSE))
   }
 
@@ -471,7 +473,7 @@ TKL_optimize <- function(
 
 #' @noRd
 # Wu and Browne (2015) error function
-# Updated 07.11.2026
+# Updated 19.11.2026
 WB_error <- function(log_dispersion, draws, R, network, df, n = population_size)
 {
 
@@ -492,13 +494,15 @@ WB_error <- function(log_dispersion, draws, R, network, df, n = population_size)
   factor_inverse <- forwardsolve(draws$cholesky %*% bartlett, diag(nodes))
   R_draw <- cov2cor(crossprod(factor_inverse))
 
-  # Scale error so that the errors are within [-1, 1]
-  # (convex combination of positive definite matrices remains positive definite)
-  error_matrix <- R_draw - R
-  error_matrix <- error_matrix * min(1, 1 / max(abs(error_matrix)))
+  # Check that the errors are within [-1, 1]
+  # (the draw is kept as is so that it remains a pure inverted Wishart draw;
+  # draws outside the bounds are treated as invalid)
+  if(max(abs(R_draw - R)) > 1){
+    return(list(valid = FALSE))
+  }
 
   # Population correlation matrix with error
-  R_population <- R + error_matrix
+  R_population <- R_draw
 
   # Return fit of known graph
   return(refit_indices(R_population, network, df, n))

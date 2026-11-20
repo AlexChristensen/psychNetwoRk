@@ -59,7 +59,8 @@
 #' is standardized to a correlation matrix. Alternative scalings of the
 #' centering (e.g., centering the covariance rather than the precision matrix)
 #' give identical results after standardization. The dispersion
-#' of the distribution is optimized
+#' of the distribution is optimized. Draws are not rescaled; draws with an
+#' error outside of -1 to 1 are treated as infeasible
 #'
 #' \item \code{"hb"} --- Hu and Bentler (1998). Underparameterized
 #' misspecification: a random subset of the edges that are zero in the true
@@ -88,7 +89,8 @@
 #' \item \code{"RMSEA"} --- Root mean square error of approximation
 #'
 #' \item \code{"SRMR"} --- Standardized root mean square residual
-#' (computed over the off-diagonal elements of the correlation matrices)
+#' (computed over the lower triangle of the correlation matrices including
+#' the diagonal, following \pkg{lavaan})
 #'
 #' }
 #'
@@ -188,8 +190,8 @@
 #' likelihood fit of the true network to the population correlation matrix
 #' with error)
 #'
-#' \item \code{P} --- Partial correlations of the population correlation
-#' matrix with error (dense in general)
+#' \item \code{Omega_error} --- Network with error (partial correlations of the
+#' population correlation matrix with error; saturated in general)
 #'
 #' \item \code{discrepancy} --- Difference between the pseudo-true and true
 #' networks (\code{Omega_pseudo - Omega})
@@ -305,7 +307,7 @@
 #' @export
 #'
 # Add population error to simulated data ----
-# Updated 11.11.2026
+# Updated 19.11.2026
 add_population_error <- function(
     ggm_object,
     method = c("cb", "tkl", "wb", "hb"),
@@ -440,6 +442,14 @@ add_population_error <- function(
   # Refit the known graph to obtain the achieved fit
   # (also verifies whether the error is orthogonal to the network)
   known <- known_graph(R_population, network)
+  if(!known$converged){
+    warning(
+      paste0(
+        "The pseudo-true network (`Omega_pseudo`) did not converge. ",
+        "Interpret `Omega_pseudo` with caution"
+      ), call. = FALSE
+    )
+  }
   R_difference <- max(abs(known$W - R))
   # (population-level fit uses the same sample size as the optimization)
   fit <- try(
@@ -475,16 +485,17 @@ add_population_error <- function(
   pseudo_true <- known$network
   dimnames(pseudo_true) <- dimnames(R)
 
-  # Population partial correlations (dense in general)
-  population_partials <- -cov2cor(chol2inv(chol(R_population)))
-  diag(population_partials) <- 0
-  dimnames(population_partials) <- dimnames(R)
+  # Network with error (partial correlations of the population correlation
+  # matrix with error; saturated in general)
+  Omega_error <- -cov2cor(chol2inv(chol(R_population)))
+  diag(Omega_error) <- 0
+  dimnames(Omega_error) <- dimnames(R)
 
   # Update population
   population <- ggm_object$population
   population$R <- R_population
   population$Omega_pseudo <- pseudo_true
-  population$P <- population_partials
+  population$Omega_error <- Omega_error
   population$discrepancy <- pseudo_true - network
   dimnames(population$discrepancy) <- dimnames(R)
 
@@ -496,7 +507,6 @@ add_population_error <- function(
     parameters = ggm_object$parameters,
     population = population,
     convergence = ggm_object$convergence,
-    original_correlation = R,
     population_error = list(
       method = method,
       metric = metric,

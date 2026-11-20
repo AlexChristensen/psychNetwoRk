@@ -43,7 +43,8 @@ Wishart is centered on the original (sparse) precision matrix and the result
 is standardized to a correlation matrix. Alternative scalings of the
 centering (e.g., centering the covariance rather than the precision matrix)
 give identical results after standardization. The dispersion
-of the distribution is optimized
+of the distribution is optimized. Draws are not rescaled; draws with an
+error outside of -1 to 1 are treated as infeasible
 
 \item \code{"hb"} --- Hu and Bentler (1998). Underparameterized
 misspecification: a random subset of the edges that are zero in the true
@@ -72,7 +73,8 @@ Available options:
 \item \code{"RMSEA"} --- Root mean square error of approximation
 
 \item \code{"SRMR"} --- Standardized root mean square residual
-(computed over the off-diagonal elements of the correlation matrices)
+(computed over the lower triangle of the correlation matrices including
+the diagonal, following \pkg{lavaan})
 
 }}
 
@@ -173,8 +175,8 @@ unchanged except for \code{R}. Added or updated elements:
 likelihood fit of the true network to the population correlation matrix
 with error)
 
-\item \code{P} --- Partial correlations of the population correlation
-matrix with error (dense in general)
+\item \code{Omega_error} --- Network with error (partial correlations of the
+population correlation matrix with error; saturated in general)
 
 \item \code{discrepancy} --- Difference between the pseudo-true and true
 networks (\code{Omega_pseudo - Omega})

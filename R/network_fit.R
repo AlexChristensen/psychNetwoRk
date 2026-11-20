@@ -74,10 +74,9 @@
 #' for severely misspecified models}
 #'
 #' \item{\code{SRMR}}{Standardized root mean residual: the root mean squared
-#' difference between the off-diagonal elements of the model-implied and
-#' observed correlation matrices (the diagonal is excluded, so this will be
-#' larger than the \pkg{lavaan} value, which includes the diagonal).
-#' Values \eqn{\leq} 0.08 indicate acceptable fit}
+#' difference between the lower triangle elements (including the diagonal) of
+#' the model-implied and observed correlation matrices, following
+#' \pkg{lavaan}. Values \eqn{\leq} 0.08 indicate acceptable fit}
 #'
 #' \item{\code{logLik}}{Gaussian log-likelihood of the model-implied
 #' correlation matrix, assuming zero mean structure (means are not
@@ -116,12 +115,13 @@
 #' @export
 #'
 # Compute network fit statistics ----
-# Updated 11.11.2026
+# Updated 19.11.2026
 network_fit <- function(network, n, S, ci = 0.95)
 {
 
   # Obtain lower triangle indices
   lower_triangle <- lower.tri(network)
+  srmr_triangle <- lower.tri(network, diag = TRUE) # SRMR includes the diagonal
 
   # Obtain model-implied zero-order correlation matrix
   R <- pcor2cor(network)
@@ -183,7 +183,7 @@ network_fit <- function(network, n, S, ci = 0.95)
     RMSEA.p.value = rmsea_p,
     CFI = cfi,
     TLI = tli,
-    SRMR = sqrt(mean((R[lower_triangle] - S[lower_triangle])^2)),
+    SRMR = sqrt(mean((R[srmr_triangle] - S[srmr_triangle])^2)),
     # Gaussian log-likelihood measures
     logLik = loglik,
     AIC = -2 * loglik + 2 * model_parameters,
