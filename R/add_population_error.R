@@ -99,7 +99,7 @@
 #' correlation matrix with error. Must be between 0 and 1 (exclusive).
 #' Defaults to the conventional cutoff for the \code{metric}:
 #' \code{0.95} for \code{"CFI"} and \code{"TLI"}, \code{0.06} for
-#' \code{"RMSEA"}, and \code{0.08} for \code{"SRMR"}
+#' \code{"RMSEA"}, and \code{0.05} for \code{"SRMR"}
 #'
 #' @param tolerance Numeric (length = 1).
 #' Maximum absolute difference between the target \code{fit_value} and the
@@ -611,7 +611,7 @@ add_population_error_errors <- function(
       "CFI" = 0.95,
       "TLI" = 0.95,
       "RMSEA" = 0.06,
-      "SRMR" = 0.08
+      "SRMR" = 0.05
     )
   }
 

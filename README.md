@@ -171,7 +171,7 @@ Perturbs the population correlation matrix of a `simulate_sbm()` or `simulate_sm
 | `ggm_object` | Output from `simulate_sbm()` or `simulate_smallworld()` |
 | `method` | Error method (see above); required, no default |
 | `metric` | Fit index to target: `"CFI"`, `"TLI"`, `"RMSEA"`, or `"SRMR"`; default depends on `method` (`"CFI"` for `"cb"` and `"tkl"`; `"RMSEA"` for `"wb"`; `"SRMR"` for `"hb"`) |
-| `fit_value` | Target value of `metric` in $(0, 1)$; default is the conventional cutoff (CFI/TLI `0.95`, RMSEA `0.06`, SRMR `0.08`) |
+| `fit_value` | Target value of `metric` in $(0, 1)$; default is the conventional cutoff (CFI/TLI `0.95`, RMSEA `0.06`, SRMR `0.05`) |
 | `tolerance` | Maximum absolute difference between `fit_value` and the achieved `metric`; default `0.01` |
 | `max_iterations` | Maximum optimization attempts (random starts or draws); default `10` |
 | `control` | Method options: `minor_factors` (`max(50, 2 * nodes)`) and `decay` (`0.30`) for `"tkl"`; `omitted` (`0.10`, proportion of zero edges) for `"hb"` |
