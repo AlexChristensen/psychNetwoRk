@@ -94,8 +94,8 @@
 #' (\code{\link{uniroot}}), subject to a maximum shrinkage of approximately
 #' 23\% following Peeters et al. (2020). After conditioning, the Weibull
 #' parameters are re-estimated by maximum likelihood from the conditioned edge
-#' weights and re-verified against the empirical bounds; draws that fall
-#' outside the bounds are rejected. Draws whose population correlation matrix
+#' weights and re-checked against the empirical bounds (a warning is sent if
+#' they fall outside the bounds). Draws whose population correlation matrix
 #' has a condition number greater than \code{target_condition + 1} are
 #' rejected. Lower values produce better-conditioned matrices. Defaults to
 #' \code{30}. Values up to \code{100} are accepted but not recommended.

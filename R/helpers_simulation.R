@@ -21,8 +21,10 @@ check_bounds <- function(shape, scale)
 # within the empirical bounds are kept (sampling from these is the same as
 # rejection sampling of bootstrapped parameters, without the risk of an
 # infinite loop when no residual brings the parameters within bounds)
-# Updated 20.11.2026
-feasible_weibull <- function(nodes, snr)
+# When no pair is within the bounds, a warning is sent (if `warn = TRUE`)
+# and all bootstrapped parameters are returned instead
+# Updated 21.11.2026
+feasible_weibull <- function(nodes, snr, warn = TRUE)
 {
 
   # Get Weibull model
@@ -37,6 +39,26 @@ feasible_weibull <- function(nodes, snr)
 
   # Keep parameters within bounds
   keep <- !((shape < 0.70) | (shape > 1.70) | (scale < 0.03) | (scale > 0.19))
+
+  # Warn and fall back to all bootstrapped parameters if none are within bounds
+  if(!any(keep)){
+
+    if(warn){
+      warning(
+        paste0(
+          "The edge weight distribution predicted for ", nodes, " nodes and a ",
+          "signal-to-noise ratio of ", round(snr, 2), " is outside of the bounds of ",
+          "the empirical data (Weibull shape between 0.70 and 1.70 and scale between ",
+          "0.03 and 0.19). Edge weights will be generated from parameters outside ",
+          "of these bounds. Use a signal-to-noise ratio closer to the empirical ",
+          "range (0.64-1.72)"
+        ), call. = FALSE
+      )
+    }
+
+    keep <- rep(TRUE, length(shape))
+
+  }
 
   # Return feasible parameters
   return(cbind(shape = unname(shape[keep]), scale = unname(scale[keep])))
@@ -86,10 +108,8 @@ generate_edges <- function(nonzero, p, snr, max_attempts = 1000)
   possible_edges <- p * (p - 1) / 2
 
   # Weibull parameters within the empirical bounds
-  feasible <- feasible_weibull(p, snr)
-  if(nrow(feasible) == 0){
-    stop("Weibull parameters are outside of the empirical bounds", call. = FALSE)
-  }
+  # (warning is sent once by `check_simulation_inputs`)
+  feasible <- feasible_weibull(p, snr, warn = FALSE)
 
   # Generate until no edges are greater than the maximum weight
   for(attempt in seq_len(max_attempts)){
@@ -192,6 +212,9 @@ condition_and_validate <- function(
   # Set lambda
   lambda <- NA
 
+  # Set bounds flag (checked again if conditioned)
+  out_of_bounds <- FALSE
+
   # Eigenvalues (positive definiteness and condition number)
   eigenvalues <- swiftelse(anyNA(R), NA, matrix_eigenvalues(R))
 
@@ -224,9 +247,7 @@ condition_and_validate <- function(
 
     # Re-estimate Weibull parameters from the conditioned edge weights
     params <- weibull_mle(abs(network[lower_triangle][network[lower_triangle] != 0]))
-    if(check_bounds(params[["shape"]], params[["scale"]])){
-      stop("Weibull parameters outside of empirical bounds after conditioning", call. = FALSE)
-    }
+    out_of_bounds <- check_bounds(params[["shape"]], params[["scale"]])
 
   }
 
@@ -248,7 +269,7 @@ condition_and_validate <- function(
   return(
     list(
       R = R, network = network, params = params,
-      lambda = lambda, condition = condition
+      lambda = lambda, condition = condition, out_of_bounds = out_of_bounds
     )
   )
 
@@ -278,6 +299,18 @@ simulation_loop <- function(attempt, max_iterations, structure)
     if(is(output, "rejection")){
       rejections[iteration] <- unclass(output)
       next
+    }
+
+    # Warn if conditioned Weibull parameters are outside of the empirical bounds
+    if(isTRUE(output$out_of_bounds)){
+      warning(
+        paste0(
+          "After conditioning, the Weibull parameters of the edge weights (shape = ",
+          round(output$params[["shape"]], 2), ", scale = ", round(output$params[["scale"]], 2),
+          ") are outside of the bounds of the empirical data (shape between 0.70 and ",
+          "1.70 and scale between 0.03 and 0.19)"
+        ), call. = FALSE
+      )
     }
 
     # Return result
@@ -336,18 +369,8 @@ check_simulation_inputs <- function(
     )
   }
 
-  # Check that Weibull parameters within the empirical bounds can be generated
-  if(nrow(feasible_weibull(nodes, snr)) == 0){
-    stop(
-      paste0(
-        "The edge weight distribution predicted for ", nodes, " nodes and a ",
-        "signal-to-noise ratio of ", round(snr, 2), " is outside of the bounds of ",
-        "the empirical data (Weibull shape between 0.70 and 1.70 and scale between ",
-        "0.03 and 0.19). Use a signal-to-noise ratio closer to the empirical range ",
-        "(0.64-1.72)"
-      ), call. = FALSE
-    )
-  }
+  # Warn if Weibull parameters within the empirical bounds cannot be generated
+  invisible(feasible_weibull(nodes, snr, warn = TRUE))
 
   # Errors for 'negative_proportion'
   typeof_error(negative_proportion, "numeric", function_name)
