@@ -9,6 +9,12 @@
 # is always started cold: warm starts from the solution of a different
 # population matrix can stall GLASSO's inner coordinate descent (which is not
 # bounded by `maxit`)
+#
+# Fit indices are population values computed from the maximum likelihood
+# discrepancy F (no sample size):
+#   RMSEA = sqrt(F / df)
+#   CFI = 1 - F / F0, where F0 = -log|Sigma| (independence model)
+#   TLI = 1 - (F / df) / (F0 / df0), where df0 = p (p - 1) / 2
 
 #' @noRd
 # Known graph (constrained maximum likelihood) via GLASSO
@@ -72,35 +78,30 @@ reference_model <- function(R, R_chol = chol(R))
 #' @noRd
 # Fit indices from the maximum likelihood discrepancy
 #   F = log|Sigma_model| + tr(Sigma_pop Sigma_model^-1) - log|Sigma_pop| - p
-# and the log-determinant of the population matrix (independence baseline)
+# and the log-determinant of the population matrix (independence baseline
+# F0 = -log|Sigma_pop|). Population (infinite sample size) indices:
+#   RMSEA = sqrt(F / df)
+#   CFI = 1 - F / F0
+#   TLI = 1 - (F / df) / (F0 / df0), where df0 = p (p - 1) / 2
 # (SRMR is from the residuals or, if supplied, `SRMR` directly)
-# Updated 20.11.2026
+# Updated 25.11.2026
 fit_from_discrepancy <- function(
     discrepancy, log_det_population, residual = NULL, nodes, df,
-    n = population_size, R_population = NULL, SRMR = NULL
+    R_population = NULL, SRMR = NULL
 )
 {
 
-  # Chi-square
-  chi_square <- n * discrepancy
+  # Discrepancy of the model (zero within rounding error at no error)
+  discrepancy <- max(discrepancy, 0)
 
-  # Baseline chi-square (independence model): -log|Sigma_pop|
-  baseline_chi_square <- -n * log_det_population
+  # Discrepancy of the independence model
+  baseline <- -log_det_population
   baseline_df <- nodes * (nodes - 1) / 2
 
-  # Guard against non-finite results
-  if(!is.finite(chi_square) || !is.finite(baseline_chi_square)){
+  # Guard against non-finite results and a degenerate baseline
+  if(!is.finite(discrepancy) || !is.finite(baseline) || baseline <= 0){
     return(list(valid = FALSE))
   }
-
-  # Check for degenerate baseline
-  denominator <- max(baseline_chi_square - baseline_df, chi_square - df, 0)
-  if(denominator == 0 || baseline_chi_square / baseline_df <= 1){
-    return(list(valid = FALSE))
-  }
-
-  # CFI, TLI, and RMSEA (shared with `network_fit`)
-  indices <- sem_indices(chi_square, df, baseline_chi_square, baseline_df, n)
 
   # Standardized root mean square residual (lower triangle including the
   # diagonal, p * (p + 1) / 2 unique elements; same as {lavaan} for correlations)
@@ -112,11 +113,11 @@ fit_from_discrepancy <- function(
   return(
     list(
       valid = TRUE, R_population = R_population,
-      discrepancy = discrepancy, chi_square = chi_square,
-      baseline_chi_square = baseline_chi_square,
+      discrepancy = discrepancy, baseline = baseline,
       baseline_df = baseline_df, df = df,
-      CFI = indices[["CFI"]], TLI = indices[["TLI"]],
-      RMSEA = indices[["RMSEA"]], SRMR = SRMR
+      CFI = 1 - discrepancy / baseline,
+      TLI = 1 - (discrepancy / df) / (baseline / baseline_df),
+      RMSEA = sqrt(discrepancy / df), SRMR = SRMR
     )
   )
 
@@ -124,9 +125,9 @@ fit_from_discrepancy <- function(
 
 #' @noRd
 # Fit indices of a model-implied matrix to a population matrix
-# Updated 20.11.2026
+# Updated 25.11.2026
 fit_indices <- function(
-    R_population, reference, df, n = population_size,
+    R_population, reference, df,
     population_chol = try(chol(R_population), silent = TRUE)
 )
 {
@@ -147,7 +148,7 @@ fit_indices <- function(
         log_det_population - nodes,
       log_det_population = log_det_population,
       residual = R_population - reference$R,
-      nodes = nodes, df = df, n = n, R_population = R_population
+      nodes = nodes, df = df, R_population = R_population
     )
   )
 
@@ -155,8 +156,8 @@ fit_indices <- function(
 
 #' @noRd
 # Fit indices of the known graph (constrained maximum likelihood)
-# Updated 20.11.2026
-refit_indices <- function(R_population, network, df, n = population_size, start = NULL)
+# Updated 25.11.2026
+refit_indices <- function(R_population, network, df, start = NULL)
 {
 
   # Check positive definiteness
@@ -179,7 +180,7 @@ refit_indices <- function(R_population, network, df, n = population_size, start 
   if(is(reference, "try-error")){
     return(list(valid = FALSE))
   }
-  fit <- fit_indices(R_population, reference, df, n, population_chol = population_chol)
+  fit <- fit_indices(R_population, reference, df, population_chol = population_chol)
 
   # Add known graph
   if(fit$valid){
@@ -194,8 +195,8 @@ refit_indices <- function(R_population, network, df, n = population_size, start 
 #' @noRd
 # Refit function of the known graph
 # Returns a function of the scalar parameter
-# Updated 20.11.2026
-scalar_refit <- function(population, network, df, n = population_size)
+# Updated 25.11.2026
+scalar_refit <- function(population, network, df)
 {
 
   # Return function
@@ -209,7 +210,7 @@ scalar_refit <- function(population, network, df, n = population_size)
       }
 
       # Return fit of known graph
-      return(refit_indices(R_population, network, df, n))
+      return(refit_indices(R_population, network, df))
 
     }
   )
@@ -380,18 +381,71 @@ solve_scalar <- function(
 
 #' @noRd
 # Solve with refits of the known graph
-# Updated 20.11.2026
+# Updated 25.11.2026
 solve_refit <- function(
     population, network, df, lower, upper, metric, target,
-    n = population_size, spacing = "geometric"
+    spacing = "geometric"
 )
 {
   return(
     solve_scalar(
-      scalar_refit(population, network, df, n), lower, upper,
+      scalar_refit(population, network, df), lower, upper,
       metric, target, spacing = spacing
     )
   )
+}
+
+# Limits on the population correlation matrix ----
+
+#' @noRd
+# Check the condition number of a population correlation matrix
+# (GLASSO becomes very slow on nearly singular matrices because its inner
+# coordinate descent is not bounded by `maxit`)
+# Updated 25.11.2026
+within_condition <- function(R_population, max_condition)
+{
+
+  # No limit
+  if(!is.finite(max_condition)){
+    return(TRUE)
+  }
+
+  # Check condition number
+  eigenvalues <- matrix_eigenvalues(R_population)
+  return(max(eigenvalues) / min(eigenvalues) <= max_condition)
+
+}
+
+#' @noRd
+# Largest parameter (up to one) for which `population` returns a population
+# correlation matrix (it returns `NULL` when not allowed). The smallest
+# parameter is always allowed
+# Updated 25.11.2026
+largest_allowed <- function(population)
+{
+
+  # Check upper bound
+  if(!is.null(population(1))){
+    return(1)
+  }
+
+  # Bisection
+  lower <- 0; upper <- 1
+  for(i in seq_len(50)){
+
+    # Update bounds
+    middle <- (lower + upper) / 2
+    if(!is.null(population(middle))){
+      lower <- middle
+    }else{
+      upper <- middle
+    }
+
+  }
+
+  # Stay away from the boundary
+  return(lower * 0.999)
+
 }
 
 # Cudeck and Browne (1992) ----
@@ -414,11 +468,11 @@ CB_population <- function(error_vector, reference, free_cells, nodes)
 #' @noRd
 # Cudeck and Browne (1992) error function
 # (the known graph is the minimizer so the reference is the original matrix)
-# Updated 20.11.2026
-CB_error <- function(error_vector, reference, free_cells, nodes, df, n = population_size)
+# Updated 25.11.2026
+CB_error <- function(error_vector, reference, free_cells, nodes, df)
 {
   return(
-    fit_indices(CB_population(error_vector, reference, free_cells, nodes), reference, df, n)
+    fit_indices(CB_population(error_vector, reference, free_cells, nodes), reference, df)
   )
 }
 
@@ -430,8 +484,8 @@ CB_error <- function(error_vector, reference, free_cells, nodes, df, n = populat
 #   SRMR(s) = s * SRMR(D)
 # (sum(l) = tr(R^-1 D) = 0 because the precision matrix is zero on the cells
 # where D is non-zero)
-# Updated 20.11.2026
-CB_direction_fit <- function(scale, eigenvalues, unit_SRMR, reference, nodes, df, n = population_size)
+# Updated 25.11.2026
+CB_direction_fit <- function(scale, eigenvalues, unit_SRMR, reference, nodes, df)
 {
 
   # Positive definiteness
@@ -445,7 +499,7 @@ CB_direction_fit <- function(scale, eigenvalues, unit_SRMR, reference, nodes, df
     fit_from_discrepancy(
       discrepancy = scale * sum(eigenvalues) - sum(log(shifted)),
       log_det_population = reference$log_det + sum(log(shifted)),
-      nodes = nodes, df = df, n = n, SRMR = scale * unit_SRMR
+      nodes = nodes, df = df, SRMR = scale * unit_SRMR
     )
   )
 
@@ -453,12 +507,12 @@ CB_direction_fit <- function(scale, eigenvalues, unit_SRMR, reference, nodes, df
 
 #' @noRd
 # Cudeck and Browne (1992) cost function
-# Updated 04.11.2026
-CB_error_cost <- function(error_vector, metric, target, reference, free_cells, nodes, df, n = population_size)
+# Updated 25.11.2026
+CB_error_cost <- function(error_vector, metric, target, reference, free_cells, nodes, df)
 {
 
   # Obtain fit
-  fit <- CB_error(error_vector, reference, free_cells, nodes, df, n)
+  fit <- CB_error(error_vector, reference, free_cells, nodes, df)
 
   # Check for invalid results
   if(!fit$valid){
@@ -472,12 +526,12 @@ CB_error_cost <- function(error_vector, metric, target, reference, free_cells, n
 
 #' @noRd
 # Cudeck and Browne (1992) gradient function
-# Updated 20.11.2026
-CB_error_gradient <- function(error_vector, metric, target, reference, free_cells, nodes, df, n = population_size)
+# Updated 25.11.2026
+CB_error_gradient <- function(error_vector, metric, target, reference, free_cells, nodes, df)
 {
 
   # Obtain fit
-  fit <- CB_error(error_vector, reference, free_cells, nodes, df, n)
+  fit <- CB_error(error_vector, reference, free_cells, nodes, df)
 
   # Cost is flat when invalid
   if(!fit$valid){
@@ -488,46 +542,36 @@ CB_error_gradient <- function(error_vector, metric, target, reference, free_cell
   R_population_inverse <- chol2inv(chol(fit$R_population))
 
   # Parameter e enters Sigma_pop at (i,j) and (j,i), so
-  #   d chi-square / de = 2 * n * (R^-1 - Sigma_pop^-1)_ij
-  #   d baseline / de = -2 * n * (Sigma_pop^-1)_ij
-  chi_gradient <- 2 * n * (reference$inverse - R_population_inverse)
-  baseline_gradient <- -2 * n * R_population_inverse
-
-  # Chi-square above degrees of freedom
-  model_excess <- fit$chi_square - df
-  baseline_excess <- fit$baseline_chi_square - fit$baseline_df
+  #   d F / de = 2 * (R^-1 - Sigma_pop^-1)_ij
+  #   d F0 / de = -2 * (Sigma_pop^-1)_ij
+  discrepancy_gradient <- 2 * (reference$inverse - R_population_inverse)
+  baseline_gradient <- -2 * R_population_inverse
 
   # Gradient of the metric
   metric_gradient <- switch(
     metric,
     "CFI" = {
 
-      # Flat when chi-square is below degrees of freedom (CFI = 1)
-      # or when it exceeds the baseline (CFI = 0)
-      if(model_excess <= 0 || model_excess >= baseline_excess){
-        matrix(0, nrow = nodes, ncol = nodes)
-      }else{
-        -(chi_gradient * baseline_excess - model_excess * baseline_gradient) /
-          baseline_excess^2
-      }
+      # CFI = 1 - F / F0
+      -(discrepancy_gradient * fit$baseline - fit$discrepancy * baseline_gradient) /
+        fit$baseline^2
 
     },
     "TLI" = {
 
-      # B = baseline chi-square / df, M = model chi-square / df
-      B <- fit$baseline_chi_square / fit$baseline_df
-      M <- fit$chi_square / df
-      (-(chi_gradient / df) * (B - 1) + (baseline_gradient / fit$baseline_df) * (M - 1)) /
-        (B - 1)^2
+      # TLI = 1 - (F df0) / (F0 df)
+      -(fit$baseline_df / df) *
+        (discrepancy_gradient * fit$baseline - fit$discrepancy * baseline_gradient) /
+        fit$baseline^2
 
     },
     "RMSEA" = {
 
-      # Flat when chi-square is below degrees of freedom (RMSEA = 0)
-      if(model_excess <= 0){
+      # Flat at no error (RMSEA = 0)
+      if(fit$discrepancy <= 0){
         matrix(0, nrow = nodes, ncol = nodes)
       }else{
-        chi_gradient / (2 * df * n * fit$RMSEA)
+        discrepancy_gradient / (2 * df * fit$RMSEA)
       }
 
     },
@@ -551,10 +595,10 @@ CB_error_gradient <- function(error_vector, metric, target, reference, free_cell
 
 #' @noRd
 # Cudeck and Browne (1992) optimization
-# Updated 20.11.2026
+# Updated 25.11.2026
 CB_optimize <- function(
     metric, target, reference, free_cells, nodes, df,
-    n = population_size, tolerance = 0.01, inverse_chol = backsolve(chol(reference$R), diag(nodes))
+    tolerance = 0.01, inverse_chol = backsolve(chol(reference$R), diag(nodes))
 )
 {
 
@@ -587,7 +631,7 @@ CB_optimize <- function(
   # Scale the direction to reach the target metric (closed form)
   scaled <- solve_scalar(
     FUN = function(scale){
-      CB_direction_fit(scale, eigenvalues, unit_SRMR, reference, nodes, df, n)
+      CB_direction_fit(scale, eigenvalues, unit_SRMR, reference, nodes, df)
     },
     lower = 0, upper = maximum_scale,
     metric = metric, target = target, tolerance = 1e-14
@@ -596,7 +640,7 @@ CB_optimize <- function(
   # Exact fit at the solution
   if(isTRUE(scaled$valid)){
     scaled <- c(
-      CB_error(direction * scaled$parameter, reference, free_cells, nodes, df, n),
+      CB_error(direction * scaled$parameter, reference, free_cells, nodes, df),
       list(parameter = scaled$parameter)
     )
   }
@@ -617,7 +661,7 @@ CB_optimize <- function(
       par = direction * start_scale,
       fn = CB_error_cost, gr = CB_error_gradient,
       metric = metric, target = target, reference = reference,
-      free_cells = free_cells, nodes = nodes, df = df, n = n,
+      free_cells = free_cells, nodes = nodes, df = df,
       method = "L-BFGS-B", lower = -1, upper = 1
     ), silent = TRUE
   )
@@ -628,7 +672,7 @@ CB_optimize <- function(
   }
 
   # Obtain fit
-  fit <- CB_error(optimization$par, reference, free_cells, nodes, df, n)
+  fit <- CB_error(optimization$par, reference, free_cells, nodes, df)
 
   # Return the solution closest to the target
   if(
@@ -649,11 +693,43 @@ CB_optimize <- function(
 # Tucker, Koopman, and Linn (1969) ----
 
 #' @noRd
+# Tucker, Koopman, and Linn (1969) population correlation matrix
+# The true network is rescaled and minor factors are added:
+#   S R S + T M T, where S^2 = 1 - share, T^2 = share, and M has a unit diagonal
+# Rescaling nodes keeps the network in its model class (the zero pattern of the
+# precision matrix and all partial correlations are scale invariant) so the
+# minor factors are the only error that is added. Subtracting a diagonal from
+# the covariance matrix instead would add conditional dependencies among
+# non-neighbors. The diagonal is exactly one (each node's variance is
+# `1 - share` from the network and `share` from the minor factors)
+# Updated 25.11.2026
+TKL_population <- function(variance, minor, R, residual_variances)
+{
+
+  # Share of each node's variance that is from the minor factors
+  share <- variance * residual_variances
+
+  # Return population correlation matrix
+  return(
+    tcrossprod(sqrt(1 - share)) * R + tcrossprod(sqrt(share)) * minor
+  )
+
+}
+
+#' @noRd
 # Tucker, Koopman, and Linn (1969) optimization
-# Updated 20.11.2026
+# Random minor factors with geometrically decaying loadings contribute a
+# proportion `variance` of each node's residual variance, 1 / [R^-1]_ii =
+# 1 - R^2_i (a network has no common and unique variance so the variance that
+# is not explained by the other nodes is the analog of the uniqueness); the
+# network part of each node is rescaled to the remaining variance. This is the
+# residual network form of generalized network psychometrics: latent factors
+# (here, the minor factors) plus a network. The proportion `variance` (between
+# 0 and 1) is solved for the target metric
+# Updated 25.11.2026
 TKL_optimize <- function(
     metric, target, R, network, nodes, df,
-    minor_factors, decay, n = population_size
+    minor_factors, decay, reference = reference_model(R)
 )
 {
 
@@ -667,25 +743,22 @@ TKL_optimize <- function(
   # Geometric decay of loadings across minor factors
   loadings <- loadings * rep((1 - decay)^(seq_len(minor_factors) - 1), each = nodes)
 
-  # Scale each variable's loadings to unit length
+  # Scale each node's loadings to unit length
   loadings <- loadings / sqrt(rowSums(loadings^2))
 
-  # Correlations from minor factors
+  # Correlations from minor factors (unit diagonal)
   minor <- tcrossprod(loadings)
 
-  # Largest weight that keeps the errors within [-1, 1]
-  # (error is linear in the weight: weight * (minor - R))
-  maximum_weight <- min(
-    0.999, 1 / max(abs((minor - R)[upper.tri(R)]))
-  )
+  # Residual variances (variance not explained by the other nodes)
+  residual_variances <- 1 / diag(reference$inverse)
 
-  # Return solution
-  # (minor factors contribute `weight` of the variance; diagonal remains one)
+  # Return solution (the population correlation matrix is positive definite
+  # because it is the sum of a positive definite and positive semi-definite matrix)
   return(
     solve_refit(
-      function(weight){(1 - weight) * R + weight * minor},
-      network, df, lower = 0, upper = maximum_weight,
-      metric = metric, target = target, n = n
+      function(variance){TKL_population(variance, minor, R, residual_variances)},
+      network, df, lower = 0, upper = 1,
+      metric = metric, target = target
     )
   )
 
@@ -735,8 +808,8 @@ WB_population <- function(log_dispersion, draws, R)
 
 #' @noRd
 # Wu and Browne (2015) optimization
-# Updated 20.11.2026
-WB_optimize <- function(metric, target, R, network, nodes, df, n = population_size, reference = reference_model(R))
+# Updated 25.11.2026
+WB_optimize <- function(metric, target, R, network, nodes, df, reference = reference_model(R))
 {
 
   # Random draws (held fixed while the dispersion is optimized)
@@ -753,7 +826,7 @@ WB_optimize <- function(metric, target, R, network, nodes, df, n = population_si
     solve_refit(
       function(log_dispersion){WB_population(log_dispersion, draws, R)},
       network, df, lower = log(1e-06), upper = log(1 / nodes),
-      metric = metric, target = target, n = n, spacing = "linear"
+      metric = metric, target = target, spacing = "linear"
     )
   )
 
@@ -783,24 +856,26 @@ HB_population <- function(size, omissions)
 
 #' @noRd
 # Hu and Bentler (1998) optimization
-# Updated 20.11.2026
+# (underparameterized misspecification: omitted edges). Omitted edges have
+# random signs and partial correlations that are uniformly distributed between
+# 0.5 and 1 times a common size that is solved for the target metric
+# Updated 25.11.2026
 HB_optimize <- function(
     metric, target, R, network, nodes, df,
-    free_cells, omitted, n = population_size, reference = reference_model(R),
+    free_cells, omitted, reference = reference_model(R),
     max_condition = Inf
 )
 {
 
-  # Randomly select omitted edges (at least one)
-  omitted_cells <- shuffle(
-    free_cells, size = max(1, round(omitted * length(free_cells)))
-  )
+  # Randomly select omitted edges
+  omitted_cells <- shuffle(free_cells, size = omitted)
 
-  # Random signs for omitted edges
+  # Random relative magnitudes (0.5 to 1) with random signs
+  # (uniform so that no omitted edge is negligible and none dominates)
   omitted_edges <- matrix(0, nrow = nodes, ncol = nodes)
-  omitted_edges[omitted_cells] <- swiftelse(
-    runif_xoshiro(length(omitted_cells)) < 0.50, -1, 1
-  )
+  omitted_edges[omitted_cells] <-
+    runif_xoshiro(length(omitted_cells), min = 0.5, max = 1) *
+    shuffle_replace(c(-1, 1), length(omitted_cells))
   omitted_edges <- omitted_edges + t(omitted_edges)
 
   # Precision matrix of the original population and the shift in
@@ -826,11 +901,8 @@ HB_optimize <- function(
     }
 
     # Check condition number
-    if(condition && is.finite(max_condition)){
-      eigenvalues <- matrix_eigenvalues(R_population)
-      if(max(eigenvalues) / min(eigenvalues) > max_condition){
-        return(NULL)
-      }
+    if(condition && !within_condition(R_population, max_condition)){
+      return(NULL)
     }
 
     # Return population correlation matrix
@@ -838,47 +910,23 @@ HB_optimize <- function(
 
   }
 
-  # Largest size (partial correlation of omitted edges) that is allowed
-  # (the smallest size is always allowed)
-  largest_size <- function(condition){
-
-    # Check upper bound
-    if(!is.null(population(1, condition))){
-      return(1)
-    }
-
-    # Bisection
-    lower <- 0; upper <- 1
-    for(i in seq_len(50)){
-
-      # Update bounds
-      middle <- (lower + upper) / 2
-      if(!is.null(population(middle, condition))){
-        lower <- middle
-      }else{
-        upper <- middle
-      }
-
-    }
-
-    # Stay away from the boundary
-    return(lower * 0.999)
-
-  }
-
-  # Find largest size (with and without the condition number limit)
-  maximum_size <- largest_size(TRUE)
-  capped <- is.finite(max_condition) && maximum_size < largest_size(FALSE)
+  # Find largest size (partial correlation of omitted edges) that is allowed
+  # (with and without the condition number limit)
+  maximum_size <- largest_allowed(function(size){population(size, TRUE)})
+  capped <- is.finite(max_condition) &&
+    maximum_size < largest_allowed(function(size){population(size, FALSE)})
 
   # Solve
   solution <- solve_refit(
     population, network, df, lower = 0, upper = maximum_size,
-    metric = metric, target = target, n = n
+    metric = metric, target = target
   )
 
-  # Flag whether the condition number limit shortened the search
+  # Flag whether the condition number limit shortened the search and add the
+  # omitted edges (partial correlations in the population)
   if(isTRUE(solution$valid)){
     solution$capped <- capped
+    solution$omitted <- solution$parameter * omitted_edges
   }
 
   # Return solution

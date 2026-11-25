@@ -12,18 +12,22 @@
 #' The error is generated with one of four methods (see \code{method}) and
 #' optimized so that the \code{metric} of the true network, fit to the
 #' population correlation matrix with error using constrained maximum
-#' likelihood (i.e., the known graph), equals \code{fit_value}. The fit indices
-#' are computed at the population level using the maximum likelihood
-#' discrepancy function between the population correlation matrix with error
-#' and the correlation matrix implied by the true network. The error added to
-#' any cell of the original population correlation matrix is limited to the
+#' likelihood (i.e., the known graph), equals \code{fit_value}. The error added
+#' to any cell of the original population correlation matrix is limited to the
 #' range -1 to 1 and the population correlation matrix with error is always
 #' positive definite.
 #'
-#' Because chi-square-based indices (CFI, TLI, and RMSEA) depend on sample
-#' size, the population-level fit is evaluated at the size of the human
-#' population (approximately 8.3 billion). At this size, the fit indices are
-#' within about \eqn{10^{-8}} of their large-sample limits
+#' The fit indices are population values (infinite sample size) computed from
+#' the maximum likelihood discrepancy \eqn{F} between the population
+#' correlation matrix with error, \eqn{\Sigma}, and the correlation matrix
+#' implied by the true network fit to it (\eqn{df} are the degrees of freedom
+#' of the true network, the number of edges that are zero):
+#' \eqn{RMSEA = \sqrt{F / df}} and \eqn{CFI = 1 - F / F_0}, where
+#' \eqn{F_0 = -\log|\Sigma|} is the discrepancy of the independence model
+#' (\eqn{TLI = 1 - (F / df) / (F_0 / df_0)} with
+#' \eqn{df_0 = p (p - 1) / 2} for \eqn{p} nodes). These are the values of
+#' \code{\link{network_fit}} for the known graph as the sample size approaches
+#' infinity
 #'
 #' Each optimization attempt uses new random draws of the error. Attempts
 #' continue (up to \code{max_iterations}) until \code{fit_value} is matched
@@ -50,8 +54,13 @@
 #'
 #' \item \code{"tkl"} --- Tucker, Koopman, and Linn (1969). Error is
 #' the contribution of many random minor factors whose loadings decay
-#' geometrically. The proportion of variance attributed to the minor factors
-#' is optimized
+#' geometrically. The minor factors take a proportion of each node's residual
+#' variance (the variance of the node that is not explained by the other
+#' nodes, \eqn{1 - R^2}, the analog of a uniqueness in a network) and this
+#' proportion is optimized. The network is rescaled to the remaining variance
+#' of each node (the partial correlations of the true network are unchanged),
+#' so the population is the true network plus latent minor factors (a residual
+#' network model)
 #'
 #' \item \code{"wb"} --- Wu and Browne (2015). The population correlation
 #' matrix with error is the inverse of a Wishart draw for the precision matrix
@@ -65,8 +74,9 @@
 #'
 #' \item \code{"hb"} --- Hu and Bentler (1998). Underparameterized
 #' misspecification: a random subset of the edges that are zero in the true
-#' network are non-zero in the population (omitted edges). The size of the
-#' omitted edges is optimized
+#' network are non-zero in the population (omitted edges). The omitted edges
+#' have random signs and partial correlations that vary uniformly between one
+#' half and one times a common size, and the common size is optimized
 #'
 #' }
 #'
@@ -141,18 +151,16 @@
 #' \item \emph{Smaller values} (e.g., \code{0.02}) --- Minor factors decay
 #' slowly, so many of them contribute about equally. The error approaches
 #' diffuse, unstructured noise (the minor-factor correlation matrix
-#' approaches an identity matrix) and its main effect is to attenuate
-#' the correlations of the original population uniformly. This
+#' approaches an identity matrix): many small error correlations. This
 #' resembles very many unrelated, tiny influences and
 #' yields little coherent structure in the error
 #'
 #' \item \emph{Larger values} (e.g., \code{0.30}, the default) --- Minor factors
 #' decay quickly, so a handful of factors dominate the error. The error is
-#' more structured: groups of variables share small unmodeled common causes
+#' more structured: groups of nodes share small unmodeled common causes
 #' (e.g., method or wording effects, omitted variables), which is more like
 #' the misspecification expected in psychometric data. The same amount of
-#' misfit is carried by fewer, larger error correlations and less attenuation
-#' of the original correlations
+#' misfit is carried by fewer, larger error correlations
 #'
 #' \item \emph{Very large values} (e.g., \code{> 0.60}) --- Essentially one or two
 #' minor factors carry all of the error, which produces a few large
@@ -166,9 +174,10 @@
 #' because later factors contribute negligible variance.
 #' Defaults to \code{0.30}
 #'
-#' \item \code{omitted} --- Proportion of the zero edges in the true network
-#' that are omitted edges for \code{method = "hb"}. At least one edge is always
-#' omitted. Defaults to \code{0.10}
+#' \item \code{omitted} --- Number of edges that are zero in the true network
+#' that are omitted edges for \code{method = "hb"} (at least one). If not
+#' specified, the number is limited to the number of zero edges. Defaults to
+#' \code{2}
 #'
 #' \item \code{max_condition} --- Largest condition number of the population
 #' correlation matrix with error for \code{method = "hb"}. The estimation of
@@ -237,8 +246,8 @@
 #' fit to the population correlation matrix with error
 #'
 #' \item \code{fit} --- Named vector of all fit indices (\code{CFI},
-#' \code{TLI}, \code{RMSEA}, and \code{SRMR}) achieved, obtained from
-#' \code{\link{network_fit}} for the known graph
+#' \code{TLI}, \code{RMSEA}, and \code{SRMR}) achieved (population values for
+#' the known graph; see Details)
 #'
 #' \item \code{delta} --- Minimum of the (maximum likelihood) discrepancy
 #' function corresponding to the achieved fit
@@ -255,6 +264,12 @@
 #' (expected for \code{method = "cb"} only)
 #'
 #' \item \code{iterations} --- Number of optimization attempts used
+#'
+#' \item \code{omitted} --- Only for \code{method = "hb"}. Matrix of the omitted
+#' edges that were added to the population (partial correlations of the
+#' population correlation matrix with error; true network values are zero).
+#' The magnitude of each omitted edge is between one half and one times the
+#' common size
 #'
 #' }
 #'
@@ -325,7 +340,7 @@
 #' @export
 #'
 # Add population error to simulated data ----
-# Updated 19.11.2026
+# Updated 25.11.2026
 add_population_error <- function(
     ggm_object,
     method = c("cb", "tkl", "wb", "hb"),
@@ -339,6 +354,9 @@ add_population_error <- function(
   # Set seed (reproducible results)
   seed_token <- seed_start(seed)
   on.exit(seed_end(seed_token), add = TRUE)
+
+  # Obtain options specified by the user
+  specified <- names(control)
 
   # Check inputs
   # (`missing()` is evaluated here: it does not carry over to a function
@@ -376,6 +394,25 @@ add_population_error <- function(
   # Degrees of freedom of the known graph
   df <- length(free_cells)
 
+  # Check number of omitted edges (cannot exceed the zero edges)
+  if(method == "hb" && control$omitted > length(free_cells)){
+
+    # Specified by the user
+    if("omitted" %in% specified){
+      stop(
+        paste0(
+          "`control$omitted` = ", control$omitted, " is more than the number ",
+          "of edges that are zero in the true network (", length(free_cells), ")",
+          "\n\nUse `control = list(omitted = ", length(free_cells), ")` or fewer"
+        ), call. = FALSE
+      )
+    }
+
+    # Default
+    control$omitted <- length(free_cells)
+
+  }
+
   # Original population correlation matrix as the reference
   R_chol <- chol(R)
   reference <- reference_model(R, R_chol)
@@ -397,7 +434,7 @@ add_population_error <- function(
       ),
       "tkl" = TKL_optimize(
         metric, target, R, network, nodes, df,
-        control$minor_factors, control$decay
+        control$minor_factors, control$decay, reference = reference
       ),
       "wb" = WB_optimize(
         metric, target, R, network, nodes, df, reference = reference
@@ -496,8 +533,8 @@ add_population_error <- function(
   }
   R_difference <- max(abs(known$W - R))
 
-  # Fit indices and discrepancy (population level; the same values as
-  # `network_fit` of the known graph at the population size)
+  # Fit indices and discrepancy (population values; the same as `network_fit`
+  # of the known graph as the sample size approaches infinity)
   fit_names <- c("CFI", "TLI", "RMSEA", "SRMR")
   fit_vector <- unlist(best$fit[fit_names])
   delta <- best$fit$discrepancy
@@ -547,6 +584,13 @@ add_population_error <- function(
     ),
     original_results = ggm_object
   )
+
+  # Add omitted edges (Hu and Bentler)
+  if(method == "hb"){
+    omitted <- best$fit$omitted
+    dimnames(omitted) <- dimnames(R)
+    results$population_error$omitted <- omitted
+  }
 
   # Add class
   class(results) <- c(class(ggm_object), "ggm_pe")
@@ -673,7 +717,7 @@ add_population_error_errors <- function(
   # Set control defaults
   control_defaults <- list(
     minor_factors = max(50, 2 * ncol(ggm_object$population$R)),
-    decay = 0.30, omitted = 0.10, max_condition = 1000
+    decay = 0.30, omitted = 2, max_condition = 1000
   )
 
   # Check for unknown options
@@ -699,7 +743,13 @@ add_population_error_errors <- function(
   }
   range_error(control$minor_factors, c(1, Inf), "add_population_error")
   range_error(control$decay, c(0, 1), "add_population_error")
-  range_error(control$omitted, c(0, 1), "add_population_error")
+  range_error(control$omitted, c(1, Inf), "add_population_error")
+  if(control$omitted %% 1 != 0){
+    stop(
+      paste0("`control$omitted` = ", control$omitted, " must be a whole number"),
+      call. = FALSE
+    )
+  }
   range_error(control$max_condition, c(1, Inf), "add_population_error")
 
   # Return inputs
