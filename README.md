@@ -176,11 +176,19 @@ Perturbs the population correlation matrix of a `simulate_sbm()` or `simulate_sm
 | `tolerance` | Maximum absolute difference between `fit_value` and the achieved `metric`; default `0.01` |
 | `max_iterations` | Maximum optimization attempts (random draws of the error); attempts continue until `fit_value` is matched; default `10` |
 | `seed` | Seed for reproducible results (default `NULL`, random) |
-| `control` | Method options: `minor_factors` (`max(50, 2 * nodes)`) and `decay` (`0.30`) for `"tkl"`; `omitted` (`0.10`, proportion of zero edges) and `max_condition` (`1000`, largest condition number of the population correlation matrix with error; `Inf` for no limit) for `"hb"` |
+| `control` | Method options: `minor_factors` (`max(50, 2 * nodes)`) and `decay` (`0.30`) for `"tkl"`; `omitted` (`2`, number of zero edges) and `max_condition` (`1000`, largest condition number of the population correlation matrix with error; `Inf` for no limit) for `"hb"` |
 
 **References:** Cudeck & Browne (1992); Tucker et al. (1969); Wu & Browne (2015); Hu & Bentler (1998).
 
-**Returns:** the input object with class `"pn_pe"` appended and a `population_error` element containing `method`, `metric`, `fit_value`, `achieved`, `fit` (CFI, TLI, RMSEA, and SRMR achieved), `delta`, `error`, `max_error`, `R_difference`, and `iterations`. `R_difference` is near zero only when the error is orthogonal to the true network (`"cb"`). The `population` element has `R` updated (with error) and gains `Omega_pseudo` (pseudo-true network), `Omega_error` (partial correlations of `R`), and `discrepancy` (`Omega_pseudo - Omega`).
+**Returns:** a list of class `c("pn_simulate", "pn_pe")` structured like `add_population_error()` in {latentFactoR}:
+
+| Element | Description |
+|---|---|
+| `data` | Data simulated from the population correlation matrix with error |
+| `population_correlation` | Population correlation matrix with error |
+| `original_correlation` | Population correlation matrix before error was added |
+| `population_error` | `method`, `metric`, `fit_value`, `achieved`, `fit` (CFI, TLI, RMSEA, and SRMR achieved), `delta`, `error`, `max_error`, `R_difference` (near zero only when the error is orthogonal to the true network, `"cb"`), `Omega_pseudo` (pseudo-true network), `Omega_error` (partial correlations of the matrix with error), `discrepancy` (`Omega_pseudo` minus the true network), `iterations`, and, for `"hb"`, `omitted` (`edges` and `size`) |
+| `original_results` | The input `pn_object` (true network and parameters) |
 
 ```r
 dm <- matrix(0.20, nrow = 3, ncol = 3)

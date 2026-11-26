@@ -192,44 +192,16 @@
 #'
 #' }
 #'
-#' @return Returns a list of the same class(es) and structure as the
-#' \code{pn_object} input (see \code{\link[psychNetwoRk]{simulate_sbm}} and
-#' \code{\link[psychNetwoRk]{simulate_smallworld}}) with the class \code{"pn_pe"}
-#' appended. The elements below mirror the input; additional elements specific to
-#' population error follow:
+#' @return Returns a list of class \code{c("pn_simulate", "pn_pe")} with the
+#' same structure as \code{add_population_error} in {latentFactoR} containing:
 #'
 #' \item{data}{Simulated data from the population correlation matrix with error
 #' (same dimensions, column names, and skew as the input data)}
 #'
-#' \item{parameters}{Parameters from the \code{pn_object} input (unchanged)}
+#' \item{population_correlation}{Population correlation matrix with error added}
 #'
-#' \item{population}{
-#' A list containing the population parameters. Elements carried over from
-#' the \code{pn_object} input (e.g., \code{Omega}, the true network, and
-#' \code{membership} for \code{\link[psychNetwoRk]{simulate_sbm}}) are
-#' unchanged except for \code{R}. Added or updated elements:
-#'
-#' \itemize{
-#'
-#' \item \code{R} --- Population correlation matrix with error added
-#'
-#' \item \code{Omega_pseudo} --- Pseudo-true network (constrained maximum
-#' likelihood fit of the true network to the population correlation matrix
-#' with error)
-#'
-#' \item \code{Omega_error} --- Network with error (partial correlations of the
-#' population correlation matrix with error; saturated in general)
-#'
-#' \item \code{discrepancy} --- Difference between the pseudo-true and true
-#' networks (\code{Omega_pseudo - Omega})
-#'
-#' }
-#' }
-#'
-#' \item{convergence}{Convergence information from the \code{pn_object} input (unchanged)}
-#'
-#' \item{original_correlation}{Original population correlation matrix \emph{before}
-#' population error was added}
+#' \item{original_correlation}{Population correlation matrix of the true network
+#' \emph{before} population error was added}
 #'
 #' \item{population_error}{
 #' A list containing the parameters used to generate population error:
@@ -263,19 +235,32 @@
 #' Values near zero indicate that the error is orthogonal to the true network
 #' (expected for \code{method = "cb"} only)
 #'
+#' \item \code{Omega_pseudo} --- Pseudo-true network (constrained maximum
+#' likelihood fit of the true network to the population correlation matrix
+#' with error)
+#'
+#' \item \code{Omega_error} --- Network with error (partial correlations of the
+#' population correlation matrix with error; saturated in general)
+#'
+#' \item \code{discrepancy} --- Difference between the pseudo-true and true
+#' networks (\code{Omega_pseudo} minus the true network)
+#'
 #' \item \code{iterations} --- Number of optimization attempts used
 #'
-#' \item \code{omitted} --- Only for \code{method = "hb"}. Matrix of the omitted
-#' edges that were added to the population (partial correlations of the
-#' population correlation matrix with error; true network values are zero).
-#' The magnitude of each omitted edge is between one half and one times the
-#' common size
+#' \item \code{omitted} --- Only for \code{method = "hb"}. A list of the
+#' omitted edges that were added to the population (true network values are
+#' zero): \code{edges} (matrix of the omitted edges as partial correlations of
+#' the population correlation matrix with error) and \code{size} (common size;
+#' the magnitude of each omitted edge is between one half and one times
+#' \code{size})
 #'
 #' }
 #'
 #' }
 #'
-#' \item{original_results}{Original \code{pn_object} input into function}
+#' \item{original_results}{Original \code{pn_object} input into function (the
+#' true network and its parameters are in \code{original_results$population}
+#' and \code{original_results$parameters})}
 #'
 #' @examples
 #' # Generate SBM data
@@ -340,7 +325,7 @@
 #' @export
 #'
 # Add population error to simulated data ----
-# Updated 25.11.2026
+# Updated 26.11.2026
 add_population_error <- function(
     pn_object,
     method = c("cb", "tkl", "wb", "hb"),
@@ -554,22 +539,21 @@ add_population_error <- function(
   Omega_error <- cor2pcor(R_population)
   dimnames(Omega_error) <- dimnames(R)
 
-  # Update population
-  population <- pn_object$population
-  population$R <- R_population
-  population$Omega_pseudo <- pseudo_true
-  population$Omega_error <- Omega_error
-  population$discrepancy <- pseudo_true - network
-  dimnames(population$discrepancy) <- dimnames(R)
+  # Obtain difference between the pseudo-true and true networks
+  discrepancy <- pseudo_true - network
+  dimnames(discrepancy) <- dimnames(R)
+
+  # Obtain error
+  error <- R_population - R
 
   # Populate results
-  # (same elements and order as `simulate_sbm` and `simulate_smallworld`,
-  # followed by the elements specific to population error)
+  # (same elements and order as `add_population_error` in {latentFactoR}; the
+  # estimates of the true model are networks rather than loadings and factor
+  # correlations)
   results <- list(
     data = data_output$data,
-    parameters = pn_object$parameters,
-    population = population,
-    convergence = pn_object$convergence,
+    population_correlation = R_population,
+    original_correlation = R,
     population_error = list(
       method = method,
       metric = metric,
@@ -577,9 +561,12 @@ add_population_error <- function(
       achieved = unname(fit_vector[metric]),
       fit = fit_vector,
       delta = delta,
-      error = R_population - R,
+      error = error,
       max_error = max_error,
       R_difference = R_difference,
+      Omega_pseudo = pseudo_true,
+      Omega_error = Omega_error,
+      discrepancy = discrepancy,
       iterations = best$iterations
     ),
     original_results = pn_object
@@ -589,7 +576,9 @@ add_population_error <- function(
   if(method == "hb"){
     omitted <- best$fit$omitted
     dimnames(omitted) <- dimnames(R)
-    results$population_error$omitted <- omitted
+    results$population_error$omitted <- list(
+      edges = omitted, size = best$fit$parameter
+    )
   }
 
   # Add class

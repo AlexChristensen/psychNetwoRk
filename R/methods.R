@@ -180,8 +180,31 @@ pn_print_matrix <- function(matrix, title, maximum = 20)
 
 #' @noRd
 # Shared print/summary body for `pn_simulate` objects
-# Updated 20.11.2026
+# (as in {latentFactoR}, the original simulated data are described first and
+# then the modification, which keeps its input in `original_results`)
+# Updated 26.11.2026
 pn_simulate_describe <- function(x, detailed = FALSE)
+{
+
+  # Population error
+  pe <- is(x, "pn_pe")
+
+  # Describe the original simulated data
+  pn_simulate_base_describe(
+    swiftelse(pe, x$original_results, x), detailed = detailed
+  )
+
+  # Describe population error
+  if(pe){
+    pn_describe_pe(x, detailed)
+  }
+
+}
+
+#' @noRd
+# Description of the simulated network data
+# Updated 26.11.2026
+pn_simulate_base_describe <- function(x, detailed = FALSE)
 {
 
   parameters <- x$parameters
@@ -248,27 +271,16 @@ pn_simulate_describe <- function(x, detailed = FALSE)
     cat(sprintf("%-24s%d\n", "Attempts:", as.integer(x$convergence$iterations)))
   }
 
-  # Population error
-  if(is(x, "pn_pe")){
-    pn_describe_pe(x, detailed)
-  }
-
   # Detailed: network
   if(isTRUE(detailed)){
     pn_print_matrix(network, "Population network (Omega)")
-    if(is(x, "pn_pe")){
-      pn_print_matrix(
-        x$population$Omega_pseudo,
-        "Pseudo-true network (Omega_pseudo)"
-      )
-    }
   }
 
 }
 
 #' @noRd
 # Population error (`add_population_error`)
-# Updated 20.11.2026
+# Updated 26.11.2026
 pn_describe_pe <- function(x, detailed = FALSE)
 {
 
@@ -276,7 +288,7 @@ pn_describe_pe <- function(x, detailed = FALSE)
   error <- x$population_error
 
   # Describe
-  pn_section("Population error")
+  pn_section("Population error added")
   cat(sprintf("  %-24s%s\n", "Method:", toupper(error$method)))
   cat(sprintf("  %-24s%.3f\n", paste0("Target ", error$metric, ":"), error$fit_value))
   cat(sprintf("  %-24s%.3f\n", paste0("Achieved ", error$metric, ":"), error$achieved))
@@ -286,7 +298,6 @@ pn_describe_pe <- function(x, detailed = FALSE)
   # Detailed fit
   if(isTRUE(detailed)){
     error_values <- error$error[upper.tri(error$error)]
-    error_values <- error_values[error_values != 0]
     cat(sprintf("  %-24s%s\n", "Error (absolute):", pn_simulate_format_range(abs(error_values))))
     cat(
       sprintf(
@@ -294,10 +305,11 @@ pn_describe_pe <- function(x, detailed = FALSE)
         paste(names(error$fit), sprintf("%.3f", error$fit), collapse = ", ")
       )
     )
-    if(error$method == "cb"){
-      cat(sprintf("  %-24s%.2e\n", "Orthogonality (max):", error$R_difference))
-    }
+    cat(sprintf("  %-24s%.2e\n", "Orthogonality (max):", error$R_difference))
     cat(sprintf("  %-24s%d\n", "Optimization attempts:", as.integer(error$iterations)))
+    pn_print_matrix(
+      error$Omega_pseudo, "  Pseudo-true network (Omega_pseudo)"
+    )
   }
 
 }

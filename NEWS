@@ -1,5 +1,14 @@
 Version 0.1.0
 
+o CHANGE: `add_population_error()` output now matches {latentFactoR}: `data`,
+  `population_correlation`, `original_correlation`, `population_error`, and
+  `original_results`. The population correlation matrix with error (previously
+  `population$R`) is `population_correlation`; `Omega_pseudo`, `Omega_error`,
+  and `discrepancy` are in `population_error`; and `parameters`, `population`
+  (e.g., the true network, `Omega`), and `convergence` are in
+  `original_results`. For `method = "hb"`, `population_error$omitted` is a list
+  of `edges` and `size`. `print()` and `summary()` follow the same layout
+
 o NEW: `control$max_condition` (default 1000) for `method = "hb"` in
   `add_population_error()` limits the condition number of the population
   correlation matrix with error. Estimating the true network (GLASSO) becomes
