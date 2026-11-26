@@ -184,7 +184,7 @@
 #' bounded at 0.50. The number of flipped nodes is rounded, so very small
 #' proportions can result in no negative edges.
 #'
-#' @return A named list of class \code{"ggm_simulate"} with four elements
+#' @return A named list of class \code{"pn_simulate"} with four elements
 #' (see \code{\link{add_population_error}} to add population error):
 #'
 #' \item{data}{Numeric matrix of dimension \code{sample_size x nodes}
@@ -445,7 +445,7 @@ simulate_smallworld <- function(
   )
 
   # Add class
-  class(results) <- "ggm_simulate"
+  class(results) <- "pn_simulate"
 
   # Return results
   return(results)

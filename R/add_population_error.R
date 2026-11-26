@@ -37,7 +37,7 @@
 #' added while remaining positive definite), a warning is given and the closest
 #' solution is used
 #'
-#' @param ggm_object Data object from \code{\link[psychNetwoRk]{simulate_sbm}} or
+#' @param pn_object Data object from \code{\link[psychNetwoRk]{simulate_sbm}} or
 #' \code{\link[psychNetwoRk]{simulate_smallworld}}
 #'
 #' @param method Character (length = 1).
@@ -193,19 +193,19 @@
 #' }
 #'
 #' @return Returns a list of the same class(es) and structure as the
-#' \code{ggm_object} input (see \code{\link[psychNetwoRk]{simulate_sbm}} and
-#' \code{\link[psychNetwoRk]{simulate_smallworld}}) with the class \code{"ggm_pe"}
+#' \code{pn_object} input (see \code{\link[psychNetwoRk]{simulate_sbm}} and
+#' \code{\link[psychNetwoRk]{simulate_smallworld}}) with the class \code{"pn_pe"}
 #' appended. The elements below mirror the input; additional elements specific to
 #' population error follow:
 #'
 #' \item{data}{Simulated data from the population correlation matrix with error
 #' (same dimensions, column names, and skew as the input data)}
 #'
-#' \item{parameters}{Parameters from the \code{ggm_object} input (unchanged)}
+#' \item{parameters}{Parameters from the \code{pn_object} input (unchanged)}
 #'
 #' \item{population}{
 #' A list containing the population parameters. Elements carried over from
-#' the \code{ggm_object} input (e.g., \code{Omega}, the true network, and
+#' the \code{pn_object} input (e.g., \code{Omega}, the true network, and
 #' \code{membership} for \code{\link[psychNetwoRk]{simulate_sbm}}) are
 #' unchanged except for \code{R}. Added or updated elements:
 #'
@@ -226,7 +226,7 @@
 #' }
 #' }
 #'
-#' \item{convergence}{Convergence information from the \code{ggm_object} input (unchanged)}
+#' \item{convergence}{Convergence information from the \code{pn_object} input (unchanged)}
 #'
 #' \item{original_correlation}{Original population correlation matrix \emph{before}
 #' population error was added}
@@ -275,7 +275,7 @@
 #'
 #' }
 #'
-#' \item{original_results}{Original \code{ggm_object} input into function}
+#' \item{original_results}{Original \code{pn_object} input into function}
 #'
 #' @examples
 #' # Generate SBM data
@@ -289,17 +289,17 @@
 #' )
 #'
 #' # Add population error (CFI = 0.95 using Cudeck and Browne)
-#' sbm_cfi <- add_population_error(ggm_object = sbm, method = "cb")
+#' sbm_cfi <- add_population_error(pn_object = sbm, method = "cb")
 #' \donttest{
 #' # Use Wu and Browne to target TLI = 0.90
 #' sbm_wb <- add_population_error(
-#'   ggm_object = sbm, method = "wb",
+#'   pn_object = sbm, method = "wb",
 #'   metric = "TLI", fit_value = 0.90
 #' )
 #'
 #' # Target RMSEA = 0.04
 #' sbm_rmsea <- add_population_error(
-#'   ggm_object = sbm, method = "cb", metric = "RMSEA",
+#'   pn_object = sbm, method = "cb", metric = "RMSEA",
 #'   fit_value = 0.04
 #' )
 #'
@@ -310,7 +310,7 @@
 #' )
 #'
 #' sw_srmr <- add_population_error(
-#'   ggm_object = sw, method = "hb", fit_value = 0.05
+#'   pn_object = sw, method = "hb", fit_value = 0.05
 #' )}
 #'
 #' @author
@@ -342,7 +342,7 @@
 # Add population error to simulated data ----
 # Updated 25.11.2026
 add_population_error <- function(
-    ggm_object,
+    pn_object,
     method = c("cb", "tkl", "wb", "hb"),
     metric = c("cfi", "tli", "rmsea", "srmr"),
     fit_value = NULL,
@@ -362,7 +362,7 @@ add_population_error <- function(
   # (`missing()` is evaluated here: it does not carry over to a function
   # that receives an argument with a default)
   inputs <- add_population_error_errors(
-    ggm_object, method, metric, fit_value,
+    pn_object, method, metric, fit_value,
     tolerance, max_iterations, control,
     method_missing = missing(method)
   )
@@ -372,8 +372,8 @@ add_population_error <- function(
   control <- inputs$control
 
   # Obtain population parameters
-  R <- ggm_object$population$R
-  network <- ggm_object$population$Omega
+  R <- pn_object$population$R
+  network <- pn_object$population$Omega
   nodes <- ncol(R)
 
   # Identify free cells (non-edges in the upper triangle)
@@ -384,7 +384,7 @@ add_population_error <- function(
   if(length(free_cells) == 0){
     stop(
       paste(
-        "The network in `ggm_object` is fully connected so there are no",
+        "The network in `pn_object` is fully connected so there are no",
         "constrained (zero) edges to add population error to.",
         "\n\nUse a sparser network to add population error"
       )
@@ -541,8 +541,8 @@ add_population_error <- function(
 
   # Generate data
   data_output <- simulate_data(
-    n = nrow(ggm_object$data), p = nodes, R = R_population,
-    skew = ggm_object$parameters$skew, skew_range = NULL
+    n = nrow(pn_object$data), p = nodes, R = R_population,
+    skew = pn_object$parameters$skew, skew_range = NULL
   )
 
   # Pseudo-true network (constrained ML fit of the true graph)
@@ -555,7 +555,7 @@ add_population_error <- function(
   dimnames(Omega_error) <- dimnames(R)
 
   # Update population
-  population <- ggm_object$population
+  population <- pn_object$population
   population$R <- R_population
   population$Omega_pseudo <- pseudo_true
   population$Omega_error <- Omega_error
@@ -567,9 +567,9 @@ add_population_error <- function(
   # followed by the elements specific to population error)
   results <- list(
     data = data_output$data,
-    parameters = ggm_object$parameters,
+    parameters = pn_object$parameters,
     population = population,
-    convergence = ggm_object$convergence,
+    convergence = pn_object$convergence,
     population_error = list(
       method = method,
       metric = metric,
@@ -582,7 +582,7 @@ add_population_error <- function(
       R_difference = R_difference,
       iterations = best$iterations
     ),
-    original_results = ggm_object
+    original_results = pn_object
   )
 
   # Add omitted edges (Hu and Bentler)
@@ -593,7 +593,7 @@ add_population_error <- function(
   }
 
   # Add class
-  class(results) <- c(class(ggm_object), "ggm_pe")
+  class(results) <- c(class(pn_object), "pn_pe")
 
   # Return results
   return(results)
@@ -604,21 +604,21 @@ add_population_error <- function(
 #' @noRd
 # Updated 04.11.2026
 add_population_error_errors <- function(
-    ggm_object, method, metric, fit_value,
+    pn_object, method, metric, fit_value,
     tolerance, max_iterations, control, method_missing = FALSE
 )
 {
 
   # Check for appropriate class
-  if(!is(ggm_object, "ggm_simulate")){
+  if(!is(pn_object, "pn_simulate")){
 
     # Produce error
     stop(
       paste(
-        "`ggm_object` input is not class \"ggm_simulate\" from the",
+        "`pn_object` input is not class \"pn_simulate\" from the",
         "`simulate_sbm` or `simulate_smallworld` functions.",
-        "\n\nInput class(es) of current `ggm_object`:",
-        paste0("\"", class(ggm_object), "\"", collapse = ", "),
+        "\n\nInput class(es) of current `pn_object`:",
+        paste0("\"", class(pn_object), "\"", collapse = ", "),
         "\n\nUse `simulate_sbm` or `simulate_smallworld` to generate your",
         "data to input into this function"
       )
@@ -627,12 +627,12 @@ add_population_error_errors <- function(
   }
 
   # Check that population error has not yet been added
-  if(is(ggm_object, "ggm_pe")){
+  if(is(pn_object, "pn_pe")){
 
     # Produce error
     stop(
       paste(
-        "`ggm_object` input is class \"ggm_pe\" from the `add_population_error` function.",
+        "`pn_object` input is class \"pn_pe\" from the `add_population_error` function.",
         "Population error has already been added.",
         "\n\nUse the `original_results` element of this object or generate new data with",
         "`simulate_sbm` or `simulate_smallworld`"
@@ -716,7 +716,7 @@ add_population_error_errors <- function(
 
   # Set control defaults
   control_defaults <- list(
-    minor_factors = max(50, 2 * ncol(ggm_object$population$R)),
+    minor_factors = max(50, 2 * ncol(pn_object$population$R)),
     decay = 0.30, omitted = 2, max_condition = 1000
   )
 
@@ -764,7 +764,7 @@ add_population_error_errors <- function(
 
 # Debugging ----
 # dm <- matrix(0.20, nrow = 3, ncol = 3); diag(dm) <- 0.90
-# ggm_object <- simulate_sbm(
+# pn_object <- simulate_sbm(
 #   nodes = 6, blocks = 3, density_matrix = dm, sample_size = 1000
 # )
 # method = "cb"; metric = "CFI"; fit_value = NULL

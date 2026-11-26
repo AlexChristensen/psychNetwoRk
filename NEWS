@@ -18,7 +18,7 @@ o NEW: `seed` argument for reproducible results in `simulate_sbm()`,
   tie-breaking in edge weight assignment previously used R's random number
   generator)
 
-o NEW: `network_fit()` returns class `"ggm_fit"` with `print()` and `summary()`
+o NEW: `network_fit()` returns class `"pn_fit"` with `print()` and `summary()`
   methods (the named numeric vector is unchanged, e.g., `fit["CFI"]`);
   `print()`/`summary()` of simulated data report the realized and requested
   negative edges, generation diagnostics, and (for large networks) summaries

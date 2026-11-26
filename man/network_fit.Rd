@@ -23,7 +23,7 @@ the confidence interval.
 Defaults to \code{0.95}}
 }
 \value{
-A named numeric vector (class \code{"ggm_fit"}, with \code{print}
+A named numeric vector (class \code{"pn_fit"}, with \code{print}
 and \code{summary} methods; indexing such as \code{fit["CFI"]} returns plain
 numbers) of traditional and likelihood-based fit
 indices. The vector always contains the following elements:

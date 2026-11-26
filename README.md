@@ -169,7 +169,7 @@ Perturbs the population correlation matrix of a `simulate_sbm()` or `simulate_sm
 
 | Argument | Description |
 |---|---|
-| `ggm_object` | Output from `simulate_sbm()` or `simulate_smallworld()` |
+| `pn_object` | Output from `simulate_sbm()` or `simulate_smallworld()` |
 | `method` | Error method (see above); required, no default |
 | `metric` | Fit index to target: `"CFI"`, `"TLI"`, `"RMSEA"`, or `"SRMR"`; default depends on `method` (`"CFI"` for `"cb"` and `"tkl"`; `"RMSEA"` for `"wb"`; `"SRMR"` for `"hb"`) |
 | `fit_value` | Target value of `metric` in $(0, 1)$; default is the conventional cutoff (CFI/TLI `0.95`, RMSEA `0.06`, SRMR `0.05`) |
@@ -180,7 +180,7 @@ Perturbs the population correlation matrix of a `simulate_sbm()` or `simulate_sm
 
 **References:** Cudeck & Browne (1992); Tucker et al. (1969); Wu & Browne (2015); Hu & Bentler (1998).
 
-**Returns:** the input object with class `"ggm_pe"` appended and a `population_error` element containing `method`, `metric`, `fit_value`, `achieved`, `fit` (CFI, TLI, RMSEA, and SRMR achieved), `delta`, `error`, `max_error`, `R_difference`, and `iterations`. `R_difference` is near zero only when the error is orthogonal to the true network (`"cb"`). The `population` element has `R` updated (with error) and gains `Omega_pseudo` (pseudo-true network), `Omega_error` (partial correlations of `R`), and `discrepancy` (`Omega_pseudo - Omega`).
+**Returns:** the input object with class `"pn_pe"` appended and a `population_error` element containing `method`, `metric`, `fit_value`, `achieved`, `fit` (CFI, TLI, RMSEA, and SRMR achieved), `delta`, `error`, `max_error`, `R_difference`, and `iterations`. `R_difference` is near zero only when the error is orthogonal to the true network (`"cb"`). The `population` element has `R` updated (with error) and gains `Omega_pseudo` (pseudo-true network), `Omega_error` (partial correlations of `R`), and `discrepancy` (`Omega_pseudo - Omega`).
 
 ```r
 dm <- matrix(0.20, nrow = 3, ncol = 3)

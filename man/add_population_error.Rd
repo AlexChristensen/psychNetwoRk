@@ -6,7 +6,7 @@
 \code{\link[psychNetwoRk]{simulate_smallworld}} Data}
 \usage{
 add_population_error(
-  ggm_object,
+  pn_object,
   method = c("cb", "tkl", "wb", "hb"),
   metric = c("cfi", "tli", "rmsea", "srmr"),
   fit_value = NULL,
@@ -17,7 +17,7 @@ add_population_error(
 )
 }
 \arguments{
-\item{ggm_object}{Data object from \code{\link[psychNetwoRk]{simulate_sbm}} or
+\item{pn_object}{Data object from \code{\link[psychNetwoRk]{simulate_sbm}} or
 \code{\link[psychNetwoRk]{simulate_smallworld}}}
 
 \item{method}{Character (length = 1).
@@ -174,19 +174,19 @@ Defaults to \code{NULL} (random seed)}
 }
 \value{
 Returns a list of the same class(es) and structure as the
-\code{ggm_object} input (see \code{\link[psychNetwoRk]{simulate_sbm}} and
-\code{\link[psychNetwoRk]{simulate_smallworld}}) with the class \code{"ggm_pe"}
+\code{pn_object} input (see \code{\link[psychNetwoRk]{simulate_sbm}} and
+\code{\link[psychNetwoRk]{simulate_smallworld}}) with the class \code{"pn_pe"}
 appended. The elements below mirror the input; additional elements specific to
 population error follow:
 
 \item{data}{Simulated data from the population correlation matrix with error
 (same dimensions, column names, and skew as the input data)}
 
-\item{parameters}{Parameters from the \code{ggm_object} input (unchanged)}
+\item{parameters}{Parameters from the \code{pn_object} input (unchanged)}
 
 \item{population}{
 A list containing the population parameters. Elements carried over from
-the \code{ggm_object} input (e.g., \code{Omega}, the true network, and
+the \code{pn_object} input (e.g., \code{Omega}, the true network, and
 \code{membership} for \code{\link[psychNetwoRk]{simulate_sbm}}) are
 unchanged except for \code{R}. Added or updated elements:
 
@@ -207,7 +207,7 @@ networks (\code{Omega_pseudo - Omega})
 }
 }
 
-\item{convergence}{Convergence information from the \code{ggm_object} input (unchanged)}
+\item{convergence}{Convergence information from the \code{pn_object} input (unchanged)}
 
 \item{original_correlation}{Original population correlation matrix \emph{before}
 population error was added}
@@ -256,7 +256,7 @@ common size
 
 }
 
-\item{original_results}{Original \code{ggm_object} input into function}
+\item{original_results}{Original \code{pn_object} input into function}
 }
 \description{
 Adds population (model) error to simulated Gaussian graphical model data.
@@ -307,17 +307,17 @@ sbm <- simulate_sbm(
 )
 
 # Add population error (CFI = 0.95 using Cudeck and Browne)
-sbm_cfi <- add_population_error(ggm_object = sbm, method = "cb")
+sbm_cfi <- add_population_error(pn_object = sbm, method = "cb")
 \donttest{
 # Use Wu and Browne to target TLI = 0.90
 sbm_wb <- add_population_error(
-  ggm_object = sbm, method = "wb",
+  pn_object = sbm, method = "wb",
   metric = "TLI", fit_value = 0.90
 )
 
 # Target RMSEA = 0.04
 sbm_rmsea <- add_population_error(
-  ggm_object = sbm, method = "cb", metric = "RMSEA",
+  pn_object = sbm, method = "cb", metric = "RMSEA",
   fit_value = 0.04
 )
 
@@ -328,7 +328,7 @@ sw <- simulate_smallworld(
 )
 
 sw_srmr <- add_population_error(
-  ggm_object = sw, method = "hb", fit_value = 0.05
+  pn_object = sw, method = "hb", fit_value = 0.05
 )}
 
 }

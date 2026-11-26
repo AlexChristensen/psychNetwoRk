@@ -205,7 +205,7 @@
 #' within-community densities, this floor may raise the realized density above
 #' the requested value.
 #'
-#' @return A named list of class \code{"ggm_simulate"} with four elements
+#' @return A named list of class \code{"pn_simulate"} with four elements
 #' (see \code{\link{add_population_error}} to add population error):
 #'
 #' \item{data}{Numeric matrix of dimension \code{sample_size x sum(nodes)}
@@ -492,7 +492,7 @@ simulate_sbm <- function(
   )
 
   # Add class
-  class(results) <- "ggm_simulate"
+  class(results) <- "pn_simulate"
 
   # Return results
   return(results)

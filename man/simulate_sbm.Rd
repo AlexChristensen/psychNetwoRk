@@ -139,7 +139,7 @@ Seed for reproducible results. The same \code{seed} gives the same results
 Defaults to \code{NULL} (random seed)}
 }
 \value{
-A named list of class \code{"ggm_simulate"} with four elements
+A named list of class \code{"pn_simulate"} with four elements
 (see \code{\link{add_population_error}} to add population error):
 
 \item{data}{Numeric matrix of dimension \code{sample_size x sum(nodes)}

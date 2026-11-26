@@ -31,7 +31,7 @@ ulapply <- function(X, FUN, ..., recursive = TRUE)
 # random number generator state is restored, so a seeded call does not change
 # the user's random stream
 # Updated 20.11.2026
-ggm_rng <- new.env(parent = emptyenv())
+pn_rng <- new.env(parent = emptyenv())
 
 #' @noRd
 # Start a seed scope (returns a token for `seed_end`; NULL when no scope
@@ -41,7 +41,7 @@ seed_start <- function(seed)
 {
 
   # No seed or a scope is already active
-  if(is.null(seed) || isTRUE(ggm_rng$active)){
+  if(is.null(seed) || isTRUE(pn_rng$active)){
     return(NULL)
   }
 
@@ -63,9 +63,9 @@ seed_start <- function(seed)
   }
 
   # Start scope
-  ggm_rng$active <- TRUE
-  ggm_rng$base <- abs(seed) + 1
-  ggm_rng$counter <- 0
+  pn_rng$active <- TRUE
+  pn_rng$base <- abs(seed) + 1
+  pn_rng$counter <- 0
 
   # Set R's random number generator (for functions from other packages)
   set.seed(seed)
@@ -87,7 +87,7 @@ seed_end <- function(token)
   }
 
   # End scope
-  ggm_rng$active <- FALSE
+  pn_rng$active <- FALSE
 
   # Restore user's random number generator state
   global <- globalenv()
@@ -115,14 +115,14 @@ call_seed <- function(seed)
   }
 
   # No active scope
-  if(!isTRUE(ggm_rng$active)){
+  if(!isTRUE(pn_rng$active)){
     return(0)
   }
 
   # Deterministic seed from the scope's seed and the call counter
   # (non-zero and exactly representable as a double)
-  ggm_rng$counter <- ggm_rng$counter + 1
-  return(ggm_rng$base * 2097152 + ggm_rng$counter)
+  pn_rng$counter <- pn_rng$counter + 1
+  return(pn_rng$base * 2097152 + pn_rng$counter)
 
 }
 

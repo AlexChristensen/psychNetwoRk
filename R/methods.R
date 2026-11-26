@@ -9,54 +9,54 @@
 
 # Updated 20.11.2026
 
-# ggm_simulate ----
+# pn_simulate ----
 
-# Print `ggm_simulate`
+# Print `pn_simulate`
 # Handles output from both `simulate_sbm` and `simulate_smallworld`,
-# which share this class (and `add_population_error`, which adds `ggm_pe`)
+# which share this class (and `add_population_error`, which adds `pn_pe`)
 # Updated 20.11.2026
 #' @export
-print.ggm_simulate <- function(x, ...)
+print.pn_simulate <- function(x, ...)
 {
 
   # Print compact overview
-  ggm_simulate_describe(x, detailed = FALSE)
+  pn_simulate_describe(x, detailed = FALSE)
 
   # Return input invisibly
   invisible(x)
 
 }
 
-# Summary `ggm_simulate`
+# Summary `pn_simulate`
 # Updated 20.11.2026
 #' @export
-summary.ggm_simulate <- function(object, ...)
+summary.pn_simulate <- function(object, ...)
 {
 
   # Print detailed overview
-  ggm_simulate_describe(object, detailed = TRUE)
+  pn_simulate_describe(object, detailed = TRUE)
 
   # Return input invisibly
   invisible(object)
 
 }
 
-# ggm_fit ----
+# pn_fit ----
 
-# Print `ggm_fit` (`network_fit`)
+# Print `pn_fit` (`network_fit`)
 # Updated 20.11.2026
 #' @export
-print.ggm_fit <- function(x, ...)
+print.pn_fit <- function(x, ...)
 {
 
   # Header
-  ggm_header("Network Fit")
+  pn_header("Network Fit")
 
   # Chi-square
   cat(
     sprintf(
       "%-24s%.3f (df = %d, p = %s)\n", "Chi-square:", x[["chisq"]], as.integer(x[["df"]]),
-      ggm_format_p(x[["chisq.p.value"]])
+      pn_format_p(x[["chisq.p.value"]])
     )
   )
 
@@ -81,17 +81,17 @@ print.ggm_fit <- function(x, ...)
 
 }
 
-# Summary `ggm_fit`
+# Summary `pn_fit`
 # Updated 20.11.2026
 #' @export
-summary.ggm_fit <- function(object, ...)
+summary.pn_fit <- function(object, ...)
 {
 
   # Overview
-  print.ggm_fit(object)
+  print.pn_fit(object)
 
   # Additional measures
-  cat(sprintf("%-24s%s\n", "RMSEA p-value (close):", ggm_format_p(object[["RMSEA.p.value"]])))
+  cat(sprintf("%-24s%s\n", "RMSEA p-value (close):", pn_format_p(object[["RMSEA.p.value"]])))
   cat("\nLikelihood-based measures:\n")
   cat(sprintf("  %-24s%.3f\n", "Log-likelihood:", object[["logLik"]]))
   cat(sprintf("  %-24s%.3f\n", "AIC:", object[["AIC"]]))
@@ -107,7 +107,7 @@ summary.ggm_fit <- function(object, ...)
 #' @noRd
 # Print a title with a rule of dashes
 # Updated 20.11.2026
-ggm_header <- function(title)
+pn_header <- function(title)
 {
   cat(title, "\n", sep = "")
   cat(strrep("-", 40), "\n", sep = "")
@@ -116,7 +116,7 @@ ggm_header <- function(title)
 #' @noRd
 # Section header
 # Updated 20.11.2026
-ggm_section <- function(title)
+pn_section <- function(title)
 {
   cat("\n", title, ":\n", sep = "")
 }
@@ -124,7 +124,7 @@ ggm_section <- function(title)
 #' @noRd
 # Format p-values
 # Updated 20.11.2026
-ggm_format_p <- function(p)
+pn_format_p <- function(p)
 {
   if(is.na(p)){
     return("NA")
@@ -139,7 +139,7 @@ ggm_format_p <- function(p)
 # Formats the range and mean of a numeric vector for print/summary
 # (a single value is printed once)
 # Updated 20.11.2026
-ggm_simulate_format_range <- function(values)
+pn_simulate_format_range <- function(values)
 {
 
   # Single value
@@ -158,7 +158,7 @@ ggm_simulate_format_range <- function(values)
 #' @noRd
 # Print a matrix (rounded) or, for large matrices, a summary of its values
 # Updated 20.11.2026
-ggm_print_matrix <- function(matrix, title, maximum = 20)
+pn_print_matrix <- function(matrix, title, maximum = 20)
 {
 
   # Large matrices
@@ -168,7 +168,7 @@ ggm_print_matrix <- function(matrix, title, maximum = 20)
     cat(
       sprintf(
         "\n%s (%d nodes; non-zero values): %s\n", title, ncol(matrix),
-        swiftelse(length(values) > 0, ggm_simulate_format_range(values), "none")
+        swiftelse(length(values) > 0, pn_simulate_format_range(values), "none")
       )
     )
   }else{
@@ -179,9 +179,9 @@ ggm_print_matrix <- function(matrix, title, maximum = 20)
 }
 
 #' @noRd
-# Shared print/summary body for `ggm_simulate` objects
+# Shared print/summary body for `pn_simulate` objects
 # Updated 20.11.2026
-ggm_simulate_describe <- function(x, detailed = FALSE)
+pn_simulate_describe <- function(x, detailed = FALSE)
 {
 
   parameters <- x$parameters
@@ -195,7 +195,7 @@ ggm_simulate_describe <- function(x, detailed = FALSE)
   possible_edges <- length(network[lower.tri(network)])
 
   # Header
-  ggm_header(
+  pn_header(
     swiftelse(
       isTRUE(sbm), "Simulated Stochastic Block Model GGM Data",
       "Simulated Small-World GGM Data"
@@ -224,13 +224,13 @@ ggm_simulate_describe <- function(x, detailed = FALSE)
       swiftelse(isTRUE(sbm), " of between-community edges", "")
     )
   )
-  cat(sprintf("%-24s%s\n", "Edge weights:", ggm_simulate_format_range(abs(edges))))
+  cat(sprintf("%-24s%s\n", "Edge weights:", pn_simulate_format_range(abs(edges))))
   cat(sprintf("%-24s%.3f\n", "Omega:", parameters$omega))
   cat(sprintf("%-24s%.3f\n", "Modularity (Q):", parameters$Q))
 
   # Skew
   if(any(parameters$skew != 0)){
-    cat(sprintf("%-24s%s\n", "Skew:", ggm_simulate_format_range(parameters$skew)))
+    cat(sprintf("%-24s%s\n", "Skew:", pn_simulate_format_range(parameters$skew)))
   }
 
   # Detailed: generation diagnostics
@@ -249,15 +249,15 @@ ggm_simulate_describe <- function(x, detailed = FALSE)
   }
 
   # Population error
-  if(is(x, "ggm_pe")){
-    ggm_describe_pe(x, detailed)
+  if(is(x, "pn_pe")){
+    pn_describe_pe(x, detailed)
   }
 
   # Detailed: network
   if(isTRUE(detailed)){
-    ggm_print_matrix(network, "Population network (Omega)")
-    if(is(x, "ggm_pe")){
-      ggm_print_matrix(
+    pn_print_matrix(network, "Population network (Omega)")
+    if(is(x, "pn_pe")){
+      pn_print_matrix(
         x$population$Omega_pseudo,
         "Pseudo-true network (Omega_pseudo)"
       )
@@ -269,14 +269,14 @@ ggm_simulate_describe <- function(x, detailed = FALSE)
 #' @noRd
 # Population error (`add_population_error`)
 # Updated 20.11.2026
-ggm_describe_pe <- function(x, detailed = FALSE)
+pn_describe_pe <- function(x, detailed = FALSE)
 {
 
   # Obtain population error
   error <- x$population_error
 
   # Describe
-  ggm_section("Population error")
+  pn_section("Population error")
   cat(sprintf("  %-24s%s\n", "Method:", toupper(error$method)))
   cat(sprintf("  %-24s%.3f\n", paste0("Target ", error$metric, ":"), error$fit_value))
   cat(sprintf("  %-24s%.3f\n", paste0("Achieved ", error$metric, ":"), error$achieved))
@@ -287,7 +287,7 @@ ggm_describe_pe <- function(x, detailed = FALSE)
   if(isTRUE(detailed)){
     error_values <- error$error[upper.tri(error$error)]
     error_values <- error_values[error_values != 0]
-    cat(sprintf("  %-24s%s\n", "Error (absolute):", ggm_simulate_format_range(abs(error_values))))
+    cat(sprintf("  %-24s%s\n", "Error (absolute):", pn_simulate_format_range(abs(error_values))))
     cat(
       sprintf(
         "  %-24s%s\n", "Fit indices:",

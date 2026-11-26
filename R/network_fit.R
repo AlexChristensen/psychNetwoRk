@@ -37,7 +37,7 @@
 #' the confidence interval.
 #' Defaults to \code{0.95}
 #'
-#' @return A named numeric vector (class \code{"ggm_fit"}, with \code{print}
+#' @return A named numeric vector (class \code{"pn_fit"}, with \code{print}
 #' and \code{summary} methods; indexing such as \code{fit["CFI"]} returns plain
 #' numbers) of traditional and likelihood-based fit
 #' indices. The vector always contains the following elements:
@@ -197,7 +197,7 @@ network_fit <- function(network, n, S, ci = 0.95)
     paste("RMSEA", format(ci * 100, trim = TRUE), c("lower", "upper"), sep = ".")
 
   # Add class
-  class(fit_indices) <- "ggm_fit"
+  class(fit_indices) <- "pn_fit"
 
   # Return fit indices
   return(fit_indices)
