@@ -99,8 +99,8 @@ rejected. Lower values produce better-conditioned matrices. Defaults to
 
 \item{max_correlation}{Numeric (length = 1).
 Maximum allowed absolute pairwise correlation in the population
-correlation matrix \code{R}. Any draw where
-\code{max(abs(R[lower.tri(R)])) > max_correlation} is rejected and a
+correlation matrix (\code{population_correlation}). Any draw with an
+absolute correlation greater than \code{max_correlation} is rejected and a
 new attempt is made. Must be between 0 and 1. Defaults to \code{0.80}.}
 
 \item{max_iterations}{Numeric (length = 1).
@@ -117,8 +117,9 @@ Seed for reproducible results. The same \code{seed} gives the same results
 Defaults to \code{NULL} (random seed)}
 }
 \value{
-A named list of class \code{"pn_simulate"} with four elements
-(see \code{\link{add_population_error}} to add population error):
+Returns a list of class \code{"pn_simulate"} with the same structure
+as \code{simulate_factors} in \{latentFactoR\} containing (see
+\code{\link{add_population_error}} to add population error):
 
 \item{data}{Numeric matrix of dimension \code{sample_size x nodes}
 containing the simulated observations drawn from the population GGM.
@@ -127,10 +128,15 @@ etc. Values are continuous (or skewed continuous when \code{skew != 0}).
 To produce ordinal data, pass the columns through
 \code{\link{categorize}}.}
 
+\item{population_correlation}{Population correlation matrix derived from the
+GGM via \code{pcor2cor}}
+
 \item{parameters}{
-A list of input, derived, and estimated parameters:
+A list containing the parameters used to generate the data:
 \itemize{
   \item \code{nodes} --- Number of nodes (as supplied)
+  \item \code{network} --- Population partial correlation matrix (the GGM
+  edge weight matrix), with zeros for absent edges
   \item \code{density} --- Target edge density (as supplied)
   \item \code{neighbors} --- Number of nearest neighbors \code{k} derived
   from \code{nodes} and \code{density}; the initial ring lattice uses
@@ -138,9 +144,6 @@ A list of input, derived, and estimated parameters:
   \item \code{rewire} --- Edge rewiring probability (as supplied)
   \item \code{negative_proportion} --- Proportion of negative edges,
   either as supplied or as sampled from the empirical distribution
-  \item \code{sample_size} --- Number of simulated observations
-  \item \code{skew} --- Named numeric vector of per-variable skew values
-  actually applied (after rounding and possible resampling)
   \item \code{weibull} --- Named numeric vector of length 2 giving the
   Weibull \code{shape} and \code{scale} parameters of the absolute edge
   weight distribution actually used. If ridge conditioning was applied,
@@ -153,49 +156,39 @@ A list of input, derived, and estimated parameters:
   network was generated from (before rewiring), so \code{omega} reflects
   how far the network moved from its generating lattice (a network with
   almost no rewiring is near zero or negative). This differs from
-  \code{\link[psychNetwoRk]{smallworldness}} called on \code{Omega}, which
+  \code{\link[psychNetwoRk]{smallworldness}} called on \code{network}, which
   by default uses a degree-preserving lattice from
   \code{\link[psychNetwoRk]{proxswap_lattice}}; the two values are
   therefore not comparable (the proxswap reference gave omega about 0.3
   higher on average in simulations). The pruned lattice is not returned;
-  use \code{smallworldness(Omega, method = "omega")} for a reference that
+  use \code{smallworldness(network, method = "omega")} for a reference that
   depends only on the returned network. Random reference graphs are
   generated with the default 100 iterations
   \item \code{Q} --- Newman-Girvan modularity of the population network
-  (\code{Omega}) computed via \code{igraph::modularity} on absolute edge
+  (\code{network}) computed via \code{igraph::modularity} on absolute edge
   weights, using the community partition returned by
   \code{igraph::cluster_leiden} with \code{objective_function =
   "modularity"}. Because \code{cluster_leiden} is a heuristic algorithm,
   \code{Q} reflects a high-quality but not necessarily optimal partition.
   Values near zero indicate absence of community structure, consistent
   with the network theory of psychopathology.
-}
-}
-
-\item{population}{
-Population-level network parameters:
-\itemize{
-  \item \code{R} --- Population correlation matrix derived from the GGM
-  via \code{pcor2cor}
-  \item \code{Omega} --- Population partial correlation matrix (the GGM
-  edge weight matrix), with zeros for absent edges
-}
-}
-
-\item{convergence}{
-Iteration and conditioning diagnostics:
-\itemize{
-  \item \code{iterations} --- Number of sampling attempts needed to find
-  a valid network
-  \item \code{rejections} --- Character vector recording the rejection
-  reason for each failed attempt. Common reasons include disconnected
-  graph structure, condition number exceeding \code{target_condition},
-  and maximum correlation exceeding \code{max_correlation}
-  \item \code{lambda} --- Ridge regularization parameter \eqn{\lambda}
-  added to the diagonal of the precision matrix to ensure positive
-  definiteness; \code{NA} if no conditioning was required
-  \item \code{condition} --- Condition number of the final population
-  correlation matrix \code{R}
+  \item \code{sample_size} --- Number of simulated observations
+  \item \code{skew} --- Named numeric vector of per-variable skew values
+  actually applied (after rounding and possible resampling)
+  \item \code{convergence} --- Iteration and conditioning diagnostics:
+  \itemize{
+    \item \code{iterations} --- Number of sampling attempts needed to find
+    a valid network
+    \item \code{rejections} --- Character vector recording the rejection
+    reason for each failed attempt. Common reasons include disconnected
+    graph structure, condition number exceeding \code{target_condition},
+    and maximum correlation exceeding \code{max_correlation}
+    \item \code{lambda} --- Ridge regularization parameter \eqn{\lambda}
+    added to the diagonal of the precision matrix to ensure positive
+    definiteness; \code{NA} if no conditioning was required
+    \item \code{condition} --- Condition number of the final population
+    correlation matrix \code{population_correlation}
+  }
 }
 }
 }

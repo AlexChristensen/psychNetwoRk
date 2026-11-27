@@ -116,7 +116,7 @@
 #' # Simulate a small-world network (population partial correlations)
 #' network <- simulate_smallworld(
 #'   nodes = 20, density = 0.30, rewire = 0.20, sample_size = 500
-#' )$population$Omega
+#' )$parameters$network
 #'
 #' # Construct binary ring lattice
 #' L <- proxswap_lattice(network)

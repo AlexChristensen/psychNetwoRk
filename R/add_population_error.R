@@ -193,7 +193,7 @@
 #' }
 #'
 #' @return Returns a list of class \code{c("pn_simulate", "pn_pe")} with the
-#' same structure as \code{add_population_error} in {latentFactoR} containing:
+#' same structure as \code{add_population_error} in \{latentFactoR\} containing:
 #'
 #' \item{data}{Simulated data from the population correlation matrix with error
 #' (same dimensions, column names, and skew as the input data)}
@@ -254,13 +254,44 @@
 #' the magnitude of each omitted edge is between one half and one times
 #' \code{size})
 #'
+#' \item \code{parameters} --- List of the parameters specific to
+#' \code{method}:
+#'
+#' \itemize{
+#'
+#' \item \code{"cb"} --- \code{direction} (random error matrix on the cells
+#' that the true network constrains to zero) and \code{scale} (multiplier of
+#' \code{direction} that gives \code{error}). \code{scale} is \code{NA} when the
+#' target could not be reached along \code{direction} and the error was instead
+#' optimized cell by cell
+#'
+#' \item \code{"tkl"} --- \code{minor_loadings} (nodes by minor factors matrix
+#' of the minor factor loadings in the population),
+#' \code{variance_proportion} (optimized proportion of each residual variance
+#' taken by the minor factors), \code{minor_variances} (variance of each node
+#' due to the minor factors, \eqn{s}), \code{residual_variances} (variance of
+#' each node not explained by the other nodes), \code{minor_factors}, and
+#' \code{decay}. Because the network is rescaled, the population correlation
+#' matrix is
+#' \code{tcrossprod(sqrt(1 - s)) * original_correlation +
+#' tcrossprod(minor_loadings)}
+#'
+#' \item \code{"wb"} --- \code{dispersion} (optimized dispersion, approximately
+#' RMSEA\eqn{^2}) and \code{wishart_df} (degrees of freedom of the Wishart
+#' distribution, \code{1 / dispersion})
+#'
+#' \item \code{"hb"} --- \code{size} (common size of the omitted edges),
+#' \code{max_condition}, and \code{capped} (whether \code{max_condition}
+#' shortened the search). The omitted edges are in \code{omitted}
+#'
+#' }
+#'
 #' }
 #'
 #' }
 #'
 #' \item{original_results}{Original \code{pn_object} input into function (the
-#' true network and its parameters are in \code{original_results$population}
-#' and \code{original_results$parameters})}
+#' true network is \code{original_results$parameters$network})}
 #'
 #' @examples
 #' # Generate SBM data
@@ -325,7 +356,7 @@
 #' @export
 #'
 # Add population error to simulated data ----
-# Updated 26.11.2026
+# Updated 27.11.2026
 add_population_error <- function(
     pn_object,
     method = c("cb", "tkl", "wb", "hb"),
@@ -357,8 +388,8 @@ add_population_error <- function(
   control <- inputs$control
 
   # Obtain population parameters
-  R <- pn_object$population$R
-  network <- pn_object$population$Omega
+  R <- pn_object$population_correlation
+  network <- pn_object$parameters$network
   nodes <- ncol(R)
 
   # Identify free cells (non-edges in the upper triangle)
@@ -581,6 +612,20 @@ add_population_error <- function(
     )
   }
 
+  # Add method-specific parameters (with names)
+  method_parameters <- best$fit$method_parameters
+  if(method == "cb"){
+    dimnames(method_parameters$direction) <- dimnames(R)
+  }else if(method == "tkl"){
+    minor_count <- ncol(method_parameters$minor_loadings)
+    dimnames(method_parameters$minor_loadings) <- list(
+      rownames(R), paste0("M", seq_len(minor_count))
+    )
+    names(method_parameters$minor_variances) <- rownames(R)
+    names(method_parameters$residual_variances) <- rownames(R)
+  }
+  results$population_error$parameters <- method_parameters
+
   # Add class
   class(results) <- c(class(pn_object), "pn_pe")
 
@@ -591,7 +636,7 @@ add_population_error <- function(
 
 # Input checking ----
 #' @noRd
-# Updated 04.11.2026
+# Updated 27.11.2026
 add_population_error_errors <- function(
     pn_object, method, metric, fit_value,
     tolerance, max_iterations, control, method_missing = FALSE
@@ -705,7 +750,7 @@ add_population_error_errors <- function(
 
   # Set control defaults
   control_defaults <- list(
-    minor_factors = max(50, 2 * ncol(pn_object$population$R)),
+    minor_factors = max(50, 2 * ncol(pn_object$population_correlation)),
     decay = 0.30, omitted = 2, max_condition = 1000
   )
 

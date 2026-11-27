@@ -81,7 +81,7 @@ Generates GGM data from a small-world topology via a three-stage process closely
 
 **Reference:** Christensen et al. (2026; [arXiv:2609.05678](https://doi.org/10.48550/arXiv.2609.05678)).
 
-**Returns:** a named list with `data`, `parameters` (including `omega` smallworldness; for `simulate_smallworld()` it is computed against the pruned lattice the network was generated from, whereas `smallworldness()` defaults to a degree-preserving `proxswap_lattice()`, so the two are not directly comparable), `population` (`R`, `Omega`), and `convergence`.
+**Returns:** a list of class `"pn_simulate"` structured like `simulate_factors()` in {latentFactoR}: `data`, `population_correlation`, and `parameters` (including the true `network`, `convergence` diagnostics, and `omega` smallworldness; for `simulate_smallworld()` it is computed against the pruned lattice the network was generated from, whereas `smallworldness()` defaults to a degree-preserving `proxswap_lattice()`, so the two are not directly comparable).
 
 ```r
 result <- simulate_smallworld(
@@ -117,7 +117,7 @@ Generates GGM data with explicit community (block) structure, where edge density
 
 **Reference:** Christensen & Choi (2026; [doi:10.1037/met0000853](https://doi.org/10.1037/met0000853)).
 
-**Returns:** a named list with `data`, `parameters` (including `Q` modularity and `weibull` edge weight parameters), `population` (`R`, `Omega`, `membership`), and `convergence`.
+**Returns:** a list of class `"pn_simulate"` structured like `simulate_factors()` in {latentFactoR}: `data`, `population_correlation`, and `parameters` (including the true `network`, `membership`, `Q` modularity, `weibull` edge weight parameters, and `convergence` diagnostics).
 
 ```r
 dm <- matrix(0.20, nrow = 3, ncol = 3)
@@ -188,7 +188,7 @@ Perturbs the population correlation matrix of a `simulate_sbm()` or `simulate_sm
 | `population_correlation` | Population correlation matrix with error |
 | `original_correlation` | Population correlation matrix before error was added |
 | `population_error` | `method`, `metric`, `fit_value`, `achieved`, `fit` (CFI, TLI, RMSEA, and SRMR achieved), `delta`, `error`, `max_error`, `R_difference` (near zero only when the error is orthogonal to the true network, `"cb"`), `Omega_pseudo` (pseudo-true network), `Omega_error` (partial correlations of the matrix with error), `discrepancy` (`Omega_pseudo` minus the true network), `iterations`, and, for `"hb"`, `omitted` (`edges` and `size`) |
-| `original_results` | The input `pn_object` (true network and parameters) |
+| `original_results` | The input `pn_object` (the true network is `original_results$parameters$network`) |
 
 ```r
 dm <- matrix(0.20, nrow = 3, ncol = 3)

@@ -595,7 +595,7 @@ CB_error_gradient <- function(error_vector, metric, target, reference, free_cell
 
 #' @noRd
 # Cudeck and Browne (1992) optimization
-# Updated 25.11.2026
+# Updated 27.11.2026
 CB_optimize <- function(
     metric, target, reference, free_cells, nodes, df,
     tolerance = 0.01, inverse_chol = backsolve(chol(reference$R), diag(nodes))
@@ -643,6 +643,9 @@ CB_optimize <- function(
       CB_error(direction * scaled$parameter, reference, free_cells, nodes, df),
       list(parameter = scaled$parameter)
     )
+    scaled$method_parameters <- list(
+      direction = error_matrix, scale = scaled$parameter
+    )
   }
 
   # Check whether the target was reached
@@ -673,6 +676,11 @@ CB_optimize <- function(
 
   # Obtain fit
   fit <- CB_error(optimization$par, reference, free_cells, nodes, df)
+
+  # Add error parameters
+  # (`scale` is missing because the error was optimized cell by cell and is no
+  # longer a multiple of the random direction)
+  fit$method_parameters <- list(direction = error_matrix, scale = NA_real_)
 
   # Return the solution closest to the target
   if(
@@ -726,7 +734,7 @@ TKL_population <- function(variance, minor, R, residual_variances)
 # residual network form of generalized network psychometrics: latent factors
 # (here, the minor factors) plus a network. The proportion `variance` (between
 # 0 and 1) is solved for the target metric
-# Updated 25.11.2026
+# Updated 27.11.2026
 TKL_optimize <- function(
     metric, target, R, network, nodes, df,
     minor_factors, decay, reference = reference_model(R)
@@ -752,15 +760,30 @@ TKL_optimize <- function(
   # Residual variances (variance not explained by the other nodes)
   residual_variances <- 1 / diag(reference$inverse)
 
-  # Return solution (the population correlation matrix is positive definite
-  # because it is the sum of a positive definite and positive semi-definite matrix)
-  return(
-    solve_refit(
-      function(variance){TKL_population(variance, minor, R, residual_variances)},
-      network, df, lower = 0, upper = 1,
-      metric = metric, target = target
-    )
+  # Solve for the variance proportion (the population correlation matrix is
+  # positive definite because it is the sum of a positive definite and positive
+  # semi-definite matrix)
+  solution <- solve_refit(
+    function(variance){TKL_population(variance, minor, R, residual_variances)},
+    network, df, lower = 0, upper = 1,
+    metric = metric, target = target
   )
+
+  # Add minor factors (loadings in the metric of the population: their sums of
+  # squares are the variance that they contribute to each node)
+  if(isTRUE(solution$valid)){
+    share <- solution$parameter * residual_variances
+    solution$method_parameters <- list(
+      minor_loadings = loadings * sqrt(share),
+      variance_proportion = solution$parameter,
+      minor_variances = share,
+      residual_variances = residual_variances,
+      minor_factors = minor_factors, decay = decay
+    )
+  }
+
+  # Return solution
+  return(solution)
 
 }
 
@@ -808,7 +831,7 @@ WB_population <- function(log_dispersion, draws, R)
 
 #' @noRd
 # Wu and Browne (2015) optimization
-# Updated 25.11.2026
+# Updated 27.11.2026
 WB_optimize <- function(metric, target, R, network, nodes, df, reference = reference_model(R))
 {
 
@@ -820,15 +843,24 @@ WB_optimize <- function(metric, target, R, network, nodes, df, reference = refer
     cholesky = t(chol(reference$inverse))
   )
 
-  # Return solution
+  # Solve for the dispersion
   # (dispersion v = 1 / m, with m > nodes - 1; v is approximately RMSEA^2)
-  return(
-    solve_refit(
-      function(log_dispersion){WB_population(log_dispersion, draws, R)},
-      network, df, lower = log(1e-06), upper = log(1 / nodes),
-      metric = metric, target = target, spacing = "linear"
-    )
+  solution <- solve_refit(
+    function(log_dispersion){WB_population(log_dispersion, draws, R)},
+    network, df, lower = log(1e-06), upper = log(1 / nodes),
+    metric = metric, target = target, spacing = "linear"
   )
+
+  # Add dispersion and degrees of freedom of the Wishart distribution
+  if(isTRUE(solution$valid)){
+    solution$method_parameters <- list(
+      dispersion = exp(solution$parameter),
+      wishart_df = exp(-solution$parameter)
+    )
+  }
+
+  # Return solution
+  return(solution)
 
 }
 
@@ -859,7 +891,7 @@ HB_population <- function(size, omissions)
 # (underparameterized misspecification: omitted edges). Omitted edges have
 # random signs and partial correlations that are uniformly distributed between
 # 0.5 and 1 times a common size that is solved for the target metric
-# Updated 25.11.2026
+# Updated 27.11.2026
 HB_optimize <- function(
     metric, target, R, network, nodes, df,
     free_cells, omitted, reference = reference_model(R),
@@ -927,6 +959,10 @@ HB_optimize <- function(
   if(isTRUE(solution$valid)){
     solution$capped <- capped
     solution$omitted <- solution$parameter * omitted_edges
+    solution$method_parameters <- list(
+      size = solution$parameter,
+      max_condition = max_condition, capped = capped
+    )
   }
 
   # Return solution

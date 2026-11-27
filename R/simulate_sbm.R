@@ -122,10 +122,10 @@
 #' to \code{100} are accepted but not recommended.
 #'
 #' @param max_correlation Numeric (length = 1).
-#' Maximum allowed absolute pairwise correlation in the population correlation
-#' matrix \code{R}. Any draw where \code{max(abs(R[lower.tri(R)])) >
-#' max_correlation} is rejected and a new attempt is made. Must be between
-#' 0 and 1. Defaults to \code{0.80}.
+#' Maximum allowed absolute pairwise correlation in the population
+#' correlation matrix (\code{population_correlation}). Any draw with an
+#' absolute correlation greater than \code{max_correlation} is rejected and a
+#' new attempt is made. Must be between 0 and 1. Defaults to \code{0.80}.
 #'
 #' @param max_iterations Numeric (length = 1).
 #' Maximum number of attempts to find a connected network with valid edge
@@ -205,8 +205,9 @@
 #' within-community densities, this floor may raise the realized density above
 #' the requested value.
 #'
-#' @return A named list of class \code{"pn_simulate"} with four elements
-#' (see \code{\link{add_population_error}} to add population error):
+#' @return Returns a list of class \code{"pn_simulate"} with the same structure
+#' as \code{simulate_factors} in \{latentFactoR\} containing (see
+#' \code{\link{add_population_error}} to add population error):
 #'
 #' \item{data}{Numeric matrix of dimension \code{sample_size x sum(nodes)}
 #' containing the simulated observations drawn from the population GGM.
@@ -215,24 +216,25 @@
 #' To produce ordinal data, pass the columns through
 #' \code{\link{categorize}}.}
 #'
+#' \item{population_correlation}{Population correlation matrix derived from the
+#' GGM via \code{pcor2cor}}
+#'
 #' \item{parameters}{
-#' A list of input, derived, and estimated parameters:
+#' A list containing the parameters used to generate the data:
 #' \itemize{
+#'   \item \code{blocks} --- Number of community blocks
 #'   \item \code{nodes} --- Integer vector of length \code{blocks} giving the
 #'   number of nodes per block (scalar input is expanded to this length)
-#'   \item \code{blocks} --- Number of community blocks
-#'   \item \code{sample_size} --- Number of simulated observations
-#'   \item \code{skew} --- Named numeric vector of per-variable skew values
-#'   actually applied (after rounding and possible resampling)
+#'   \item \code{network} --- Population partial correlation matrix (the GGM
+#'   edge weight matrix), with zeros for absent edges
+#'   \item \code{membership} --- Named integer vector of length
+#'   \code{sum(nodes)} giving the community block assignment (1 to
+#'   \code{blocks}) for each node
 #'   \item \code{density_matrix} --- The \code{blocks x blocks} density matrix
 #'   as supplied
 #'   \item \code{negative_proportion} --- The proportion of between-community
 #'   edges assigned a negative sign, either as supplied or as sampled from the
 #'   empirical distribution
-#'   \item \code{weibull} --- Named numeric vector of length 2 giving the
-#'   Weibull \code{shape} and \code{scale} parameters of the absolute edge
-#'   weight distribution actually used. If ridge conditioning was applied,
-#'   these are re-estimated from the conditioned network via MLE.
 #'   \item \code{diffusion} --- Numeric vector of length 2 giving the
 #'   within-block reservation range as a proportion of within-community edges,
 #'   on the internal scale used by the sampler (i.e., \code{range(1 -
@@ -240,53 +242,44 @@
 #'   when \code{diffusion} is scalar. Note this is the complement of the
 #'   user-supplied \code{diffusion} value and represents the fraction of
 #'   within-community slots filled from the top-ranked draws.
+#'   \item \code{weibull} --- Named numeric vector of length 2 giving the
+#'   Weibull \code{shape} and \code{scale} parameters of the absolute edge
+#'   weight distribution actually used. If ridge conditioning was applied,
+#'   these are re-estimated from the conditioned network via MLE.
 #'   \item \code{omega} --- Smallworldness omega statistic of the generated
 #'   network (Telesford et al., 2011). Values near zero indicate small-world
 #'   structure; negative values indicate lattice-like structure; positive
 #'   values indicate random-like structure (see \code{\link[psychNetwoRk]{smallworldness}}).
-#'   Computed with \code{smallworldness(Omega, method = "omega")}, which uses
+#'   Computed with \code{smallworldness(network, method = "omega")}, which uses
 #'   a degree-preserving lattice from \code{\link[psychNetwoRk]{proxswap_lattice}}
 #'   and 100 random reference graphs (unlike \code{simulate_smallworld}, which
 #'   uses the pruned lattice that the network was generated from)
 #'   \item \code{Q} --- Newman-Girvan modularity of the population network
-#'   (\code{Omega}) with respect to the block membership, computed via
+#'   (\code{network}) with respect to the block membership, computed via
 #'   \code{igraph::modularity} on absolute edge weights. Provides a summary
 #'   of the community contrast actually achieved after weight assignment and
 #'   any ridge conditioning.
-#' }
-#' }
-#'
-#' \item{population}{
-#' Population-level network parameters:
-#' \itemize{
-#'   \item \code{R} --- Population correlation matrix derived from the GGM
-#'   via \code{pcor2cor}
-#'   \item \code{Omega} --- Population partial correlation matrix (the GGM
-#'   edge weight matrix), with zeros for absent edges
-#'   \item \code{membership} --- Named integer vector of length
-#'   \code{sum(nodes)} giving the community block assignment (1 to
-#'   \code{blocks}) for each node
-#' }
-#' }
-#'
-#' \item{convergence}{
-#' Iteration and conditioning diagnostics:
-#' \itemize{
-#'   \item \code{iterations} --- Number of sampling attempts needed to find a
-#'   valid network (including graph structure and edge weight draws)
-#'   \item \code{rejections} --- Character vector of length
-#'   \code{max_iterations} recording the rejection reason for each failed
-#'   attempt; entries for successful or unused iterations are empty strings.
-#'   Common reasons include disconnected graph structure, condition number
-#'   exceeding \code{target_condition}, maximum correlation exceeding
-#'   \code{max_correlation}, and Weibull parameters falling outside empirical
-#'   bounds after ridge conditioning.
-#'   \item \code{lambda} --- Ridge regularization parameter \eqn{\lambda}
-#'   added to the diagonal of the precision matrix to ensure positive
-#'   definiteness; \code{NA} if no conditioning was required
-#'   \item \code{condition} --- Condition number of the final population
-#'   correlation matrix \code{R}, computed via \code{kappa} with
-#'   \code{exact = TRUE}
+#'   \item \code{sample_size} --- Number of simulated observations
+#'   \item \code{skew} --- Named numeric vector of per-variable skew values
+#'   actually applied (after rounding and possible resampling)
+#'   \item \code{convergence} --- Iteration and conditioning diagnostics:
+#'   \itemize{
+#'     \item \code{iterations} --- Number of sampling attempts needed to find a
+#'     valid network (including graph structure and edge weight draws)
+#'     \item \code{rejections} --- Character vector of length
+#'     \code{max_iterations} recording the rejection reason for each failed
+#'     attempt; entries for successful or unused iterations are empty strings.
+#'     Common reasons include disconnected graph structure, condition number
+#'     exceeding \code{target_condition}, maximum correlation exceeding
+#'     \code{max_correlation}, and Weibull parameters falling outside empirical
+#'     bounds after ridge conditioning.
+#'     \item \code{lambda} --- Ridge regularization parameter \eqn{\lambda}
+#'     added to the diagonal of the precision matrix to ensure positive
+#'     definiteness; \code{NA} if no conditioning was required
+#'     \item \code{condition} --- Condition number of the final population
+#'     correlation matrix \code{population_correlation}, computed via \code{kappa} with
+#'     \code{exact = TRUE}
+#'   }
 #' }
 #' }
 #'
@@ -383,7 +376,7 @@
 #' @export
 #'
 # Simulate SBM GGM data ----
-# Updated 18.11.2026
+# Updated 27.11.2026
 simulate_sbm <- function(
     nodes, blocks, density_matrix,
     snr = 1, diffusion = 0, diffusion_range = NULL,
@@ -464,30 +457,29 @@ simulate_sbm <- function(
   )
 
   # Populate results
+  # (same elements and order as `simulate_factors` in {latentFactoR})
   results <- list(
     data = data_output$data,
+    population_correlation = output$R,
     parameters = list(
-      nodes = nodes,
       blocks = blocks,
-      sample_size = sample_size,
-      skew = data_output$skew,
+      nodes = nodes,
+      network = output$network,
+      membership = output$membership,
       density_matrix = density_matrix,
       negative_proportion = negative_proportion,
-      weibull = output$params,
       diffusion = output$diffusion,
+      weibull = output$params,
       omega = smallworldness(network = output$network, method = "omega"),
-      Q = igraph::modularity(convert2igraph(abs(output$network)), output$membership)
-    ),
-    population = list(
-      R = output$R,
-      Omega = output$network,
-      membership = output$membership
-    ),
-    convergence = list(
-      iterations = iter,
-      rejections = rejections,
-      lambda = output$lambda,
-      condition = output$condition
+      Q = igraph::modularity(convert2igraph(abs(output$network)), output$membership),
+      sample_size = sample_size,
+      skew = data_output$skew,
+      convergence = list(
+        iterations = iter,
+        rejections = rejections,
+        lambda = output$lambda,
+        condition = output$condition
+      )
     )
   )
 

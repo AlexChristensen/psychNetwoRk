@@ -203,12 +203,12 @@ pn_simulate_describe <- function(x, detailed = FALSE)
 
 #' @noRd
 # Description of the simulated network data
-# Updated 26.11.2026
+# Updated 27.11.2026
 pn_simulate_base_describe <- function(x, detailed = FALSE)
 {
 
   parameters <- x$parameters
-  network <- x$population$Omega
+  network <- x$parameters$network
   sbm <- !is.null(parameters$blocks)
   dimensions <- dim(x$data)
 
@@ -264,16 +264,16 @@ pn_simulate_base_describe <- function(x, detailed = FALSE)
         parameters$weibull[["shape"]], parameters$weibull[["scale"]]
       )
     )
-    cat(sprintf("%-24s%.3f\n", "Condition number:", x$convergence$condition))
-    if(!is.na(x$convergence$lambda)){
-      cat(sprintf("%-24s%.5f\n", "Ridge (lambda):", x$convergence$lambda))
+    cat(sprintf("%-24s%.3f\n", "Condition number:", parameters$convergence$condition))
+    if(!is.na(parameters$convergence$lambda)){
+      cat(sprintf("%-24s%.5f\n", "Ridge (lambda):", parameters$convergence$lambda))
     }
-    cat(sprintf("%-24s%d\n", "Attempts:", as.integer(x$convergence$iterations)))
+    cat(sprintf("%-24s%d\n", "Attempts:", as.integer(parameters$convergence$iterations)))
   }
 
   # Detailed: network
   if(isTRUE(detailed)){
-    pn_print_matrix(network, "Population network (Omega)")
+    pn_print_matrix(network, "Population network")
   }
 
 }

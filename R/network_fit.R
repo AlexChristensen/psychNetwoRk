@@ -109,7 +109,7 @@
 #'
 #' # Obtain fit of the true network
 #' # (expects continuous variables!)
-#' network_fit(network = sw$population$Omega, n = nrow(sw$data), S = S)
+#' network_fit(network = sw$parameters$network, n = nrow(sw$data), S = S)
 #'
 #' @references
 #' Epskamp, S., Rhemtulla, M., & Borsboom, D. (2017).

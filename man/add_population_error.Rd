@@ -174,7 +174,7 @@ Defaults to \code{NULL} (random seed)}
 }
 \value{
 Returns a list of class \code{c("pn_simulate", "pn_pe")} with the
-same structure as \code{add_population_error} in {latentFactoR} containing:
+same structure as \code{add_population_error} in \{latentFactoR\} containing:
 
 \item{data}{Simulated data from the population correlation matrix with error
 (same dimensions, column names, and skew as the input data)}
@@ -235,13 +235,44 @@ the population correlation matrix with error) and \code{size} (common size;
 the magnitude of each omitted edge is between one half and one times
 \code{size})
 
+\item \code{parameters} --- List of the parameters specific to
+\code{method}:
+
+\itemize{
+
+\item \code{"cb"} --- \code{direction} (random error matrix on the cells
+that the true network constrains to zero) and \code{scale} (multiplier of
+\code{direction} that gives \code{error}). \code{scale} is \code{NA} when the
+target could not be reached along \code{direction} and the error was instead
+optimized cell by cell
+
+\item \code{"tkl"} --- \code{minor_loadings} (nodes by minor factors matrix
+of the minor factor loadings in the population),
+\code{variance_proportion} (optimized proportion of each residual variance
+taken by the minor factors), \code{minor_variances} (variance of each node
+due to the minor factors, \eqn{s}), \code{residual_variances} (variance of
+each node not explained by the other nodes), \code{minor_factors}, and
+\code{decay}. Because the network is rescaled, the population correlation
+matrix is
+\code{tcrossprod(sqrt(1 - s)) * original_correlation +
+tcrossprod(minor_loadings)}
+
+\item \code{"wb"} --- \code{dispersion} (optimized dispersion, approximately
+RMSEA\eqn{^2}) and \code{wishart_df} (degrees of freedom of the Wishart
+distribution, \code{1 / dispersion})
+
+\item \code{"hb"} --- \code{size} (common size of the omitted edges),
+\code{max_condition}, and \code{capped} (whether \code{max_condition}
+shortened the search). The omitted edges are in \code{omitted}
+
+}
+
 }
 
 }
 
 \item{original_results}{Original \code{pn_object} input into function (the
-true network and its parameters are in \code{original_results$population}
-and \code{original_results$parameters})}
+true network is \code{original_results$parameters$network})}
 }
 \description{
 Adds population (model) error to simulated Gaussian graphical model data.

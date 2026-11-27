@@ -1,12 +1,24 @@
 Version 0.1.0
 
+o CHANGE: `simulate_sbm()` and `simulate_smallworld()` output now matches
+  `simulate_factors()` in {latentFactoR}: `data`, `population_correlation`, and
+  `parameters`. The population correlation matrix (previously `population$R`) is
+  `population_correlation`; the true network (previously `population$Omega`) is
+  `parameters$network`; `membership` (previously `population$membership`) is
+  `parameters$membership`; and `convergence` is `parameters$convergence`
+
+o NEW: `add_population_error()` returns the parameters specific to each method
+  in `population_error$parameters`: the minor factor loadings and variance
+  proportion (`"tkl"`), the error direction and its scale (`"cb"`), the
+  dispersion and Wishart degrees of freedom (`"wb"`), and the size of the
+  omitted parameters (`"hb"`)
+
 o CHANGE: `add_population_error()` output now matches {latentFactoR}: `data`,
   `population_correlation`, `original_correlation`, `population_error`, and
   `original_results`. The population correlation matrix with error (previously
   `population$R`) is `population_correlation`; `Omega_pseudo`, `Omega_error`,
-  and `discrepancy` are in `population_error`; and `parameters`, `population`
-  (e.g., the true network, `Omega`), and `convergence` are in
-  `original_results`. For `method = "hb"`, `population_error$omitted` is a list
+  and `discrepancy` are in `population_error`; and the input object (e.g., the
+  true network, `parameters$network`) is in `original_results`. For `method = "hb"`, `population_error$omitted` is a list
   of `edges` and `size`. `print()` and `summary()` follow the same layout
 
 o NEW: `control$max_condition` (default 1000) for `method = "hb"` in
